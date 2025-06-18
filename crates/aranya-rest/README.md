@@ -135,3 +135,36 @@ Error responses include details:
 - Consider running behind a reverse proxy with TLS in production
 - Access control should be implemented at the network or proxy level
 - Ensure the `api.pk` file has appropriate file permissions for your security requirements
+
+## Testing with Multiple Daemons
+
+### Quick Integration Test
+
+For a complete end-to-end test that validates the REST API:
+
+```bash
+# Run full integration test (starts daemons, tests functionality, cleans up)
+./scripts/full-test.bash
+```
+
+This script will:
+- Start 2 daemon instances with REST servers
+- Create a team on one daemon
+- Add the second daemon's device to the team
+- Verify device roles and team membership
+- Test all major REST endpoints
+- Automatically clean up when finished
+
+### Manual Testing
+
+For manual testing and development:
+
+```bash
+# Quick setup of 2 daemons with REST servers
+./scripts/setup-multi-daemon.bash
+
+# Setup 3 daemons starting from port 9000
+./scripts/setup-multi-daemon.bash 3 9000
+```
+
+See `scripts/README.md` for detailed testing instructions and examples.

@@ -43,62 +43,62 @@ impl RestServer {
             .route("/api/v1/sync/peers", delete(handlers::remove_sync_peer))
             // Team management
             .route("/api/v1/teams", post(handlers::create_team))
-            .route("/api/v1/teams/:team_id", delete(handlers::close_team))
+            .route("/api/v1/teams/{team_id}", delete(handlers::close_team))
             .route(
-                "/api/v1/teams/:team_id/devices",
+                "/api/v1/teams/{team_id}/devices",
                 get(handlers::query_devices_on_team),
             )
             // Device management within teams
             .route(
-                "/api/v1/teams/:team_id/devices",
+                "/api/v1/teams/{team_id}/devices",
                 post(handlers::add_device_to_team),
             )
             .route(
-                "/api/v1/teams/:team_id/devices/:device_id",
+                "/api/v1/teams/{team_id}/devices/{device_id}",
                 delete(handlers::remove_device_from_team),
             )
             .route(
-                "/api/v1/teams/:team_id/devices/:device_id/role",
+                "/api/v1/teams/{team_id}/devices/{device_id}/role",
                 get(handlers::query_device_role),
             )
             .route(
-                "/api/v1/teams/:team_id/devices/:device_id/keybundle",
+                "/api/v1/teams/{team_id}/devices/{device_id}/keybundle",
                 get(handlers::query_device_keybundle),
             )
             // Role management
             .route(
-                "/api/v1/teams/:team_id/roles/assign",
+                "/api/v1/teams/{team_id}/roles/assign",
                 post(handlers::assign_role),
             )
             .route(
-                "/api/v1/teams/:team_id/roles/revoke",
+                "/api/v1/teams/{team_id}/roles/revoke",
                 post(handlers::revoke_role),
             )
             // Network identifier management
             .route(
-                "/api/v1/teams/:team_id/net-identifiers/assign",
+                "/api/v1/teams/{team_id}/net-identifiers/assign",
                 post(handlers::assign_net_identifier),
             )
             .route(
-                "/api/v1/teams/:team_id/net-identifiers/remove",
+                "/api/v1/teams/{team_id}/net-identifiers/remove",
                 post(handlers::remove_net_identifier),
             )
             // Label management
-            .route("/api/v1/teams/:team_id/labels", get(handlers::query_labels))
+            .route("/api/v1/teams/{team_id}/labels", get(handlers::query_labels))
             .route(
-                "/api/v1/teams/:team_id/labels",
+                "/api/v1/teams/{team_id}/labels",
                 post(handlers::create_label),
             )
             .route(
-                "/api/v1/teams/:team_id/labels/:label_id",
+                "/api/v1/teams/{team_id}/labels/{label_id}",
                 delete(handlers::delete_label),
             )
             .route(
-                "/api/v1/teams/:team_id/labels/assign",
+                "/api/v1/teams/{team_id}/labels/assign",
                 post(handlers::assign_label),
             )
             .route(
-                "/api/v1/teams/:team_id/labels/revoke",
+                "/api/v1/teams/{team_id}/labels/revoke",
                 post(handlers::revoke_label),
             )
             .layer(ServiceBuilder::new().layer(CorsLayer::permissive()))

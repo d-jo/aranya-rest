@@ -3,6 +3,14 @@ name = "aranya-rest"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "aranya-rest"
+path = "src/main.rs"
+
+[[bin]]
+name = "multi-daemon"
+path = "src/bin/multi-daemon.rs"
+
 [dependencies]
 aranya-daemon-api = { path = "../aranya-daemon-api" }
 aranya-util = { path = "../aranya-util" }
@@ -23,3 +31,4 @@ hex = "0.4"
 base64 = "0.22"
 clap = { version = "4.0", features = ["derive"] }
 thiserror = "1.0"
+tempfile = "3.6.0"

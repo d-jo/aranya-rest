@@ -592,6 +592,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tarpc",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tower",

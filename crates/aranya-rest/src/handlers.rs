@@ -71,7 +71,16 @@ pub struct CreateTeamResponse {
 
 #[derive(Serialize, Deserialize)]
 pub struct AddDeviceRequest {
-    pub keys: KeyBundleJson,
+    pub keys: KeyBundleInput,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum KeyBundleInput {
+    // Accept either the raw KeyBundle format (as returned by get_key_bundle)
+    Raw(KeyBundle),
+    // Or base64-encoded strings
+    Base64(KeyBundleJson),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -212,6 +221,17 @@ impl From<SyncPeerConfigJson> for SyncPeerConfig {
 impl From<TeamConfigJson> for TeamConfig {
     fn from(_config: TeamConfigJson) -> Self {
         TeamConfig {}
+    }
+}
+
+impl TryFrom<KeyBundleInput> for KeyBundle {
+    type Error = RestError;
+
+    fn try_from(input: KeyBundleInput) -> Result<Self, Self::Error> {
+        match input {
+            KeyBundleInput::Raw(keys) => Ok(keys),
+            KeyBundleInput::Base64(keys) => keys.try_into(),
+        }
     }
 }
 
