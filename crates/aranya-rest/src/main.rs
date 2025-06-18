@@ -4,6 +4,7 @@ use anyhow::Context;
 use aranya_daemon_api::{crypto::PublicApiKey, CS};
 use aranya_rest::RestServer;
 use clap::Parser;
+use tokio::fs;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[derive(Parser)]
@@ -13,10 +14,6 @@ struct Args {
     /// Path to the daemon's Unix domain socket
     #[arg(long, default_value = "/tmp/aranya-daemon.sock")]
     daemon_socket: PathBuf,
-
-    /// API key for daemon authentication (hex encoded)
-    #[arg(long)]
-    api_key: String,
 
     /// Address to bind the REST server to
     #[arg(long, default_value = "127.0.0.1:8080")]
@@ -35,10 +32,13 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Args::parse();
 
-    // Parse API key from hex string
-    let api_key_bytes = hex::decode(&args.api_key).context("Failed to decode API key as hex")?;
-    let api_key: PublicApiKey<CS> =
-        PublicApiKey::decode(&api_key_bytes).context("Invalid API key format")?;
+    // Load API key from file next to the daemon socket (same as aranya-client)
+    let api_pk_path = args.daemon_socket.parent().unwrap_or(&args.daemon_socket).join("api.pk");
+    let api_key_bytes = fs::read(&api_pk_path)
+        .await
+        .with_context(|| format!("Unable to read daemon API public key from {}", api_pk_path.display()))?;
+    let api_key: PublicApiKey<CS> = PublicApiKey::decode(&api_key_bytes)
+        .context("Unable to decode public API key")?;
 
     let server = RestServer::new(args.daemon_socket, api_key, args.bind_addr).await?;
 

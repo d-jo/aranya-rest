@@ -15,14 +15,19 @@ cargo build --bin aranya-rest --release
 ## Usage
 
 ```bash
-aranya-rest --daemon-socket /path/to/daemon.sock --api-key <hex-encoded-key> --bind-addr 127.0.0.1:8080
+aranya-rest --daemon-socket /path/to/daemon.sock --bind-addr 127.0.0.1:8080
 ```
+
+The server automatically loads the daemon's API public key from `api.pk` file located next to the daemon socket (same location used by aranya-client).
 
 ### Command Line Arguments
 
 - `--daemon-socket`: Path to the daemon's Unix domain socket (default: `/tmp/aranya-daemon.sock`)
-- `--api-key`: Daemon API public key as hex-encoded string (required)
 - `--bind-addr`: Address to bind the REST server (default: `127.0.0.1:8080`)
+
+### API Key Location
+
+The server expects to find the daemon's public API key in a file named `api.pk` in the same directory as the daemon socket. This matches the behavior of the standard aranya-client.
 
 ## API Endpoints
 
@@ -124,7 +129,9 @@ Error responses include details:
 
 ## Security Notes
 
+- The API key is automatically loaded from the `api.pk` file next to the daemon socket
 - The API key is the public API key for the daemon, not a private key
 - All communication with the daemon is encrypted using the txp protocol
 - Consider running behind a reverse proxy with TLS in production
 - Access control should be implemented at the network or proxy level
+- Ensure the `api.pk` file has appropriate file permissions for your security requirements
