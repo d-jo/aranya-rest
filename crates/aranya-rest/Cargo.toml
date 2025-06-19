@@ -32,3 +32,11 @@ base64 = "0.22"
 clap = { version = "4.0", features = ["derive"] }
 thiserror = "1.0"
 tempfile = "3.6.0"
+postcard = "1"
+
+[dev-dependencies]
+aranya-client = { path = "../aranya-client" }
+aranya-daemon = { path = "../aranya-daemon" }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+backon = "1.2.0"
+test-log = { version = "0.2.14", default-features = false, features = ["trace"] }

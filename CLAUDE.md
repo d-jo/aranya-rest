@@ -16,6 +16,7 @@ applications. The repository contains:
 - **aranya-daemon-api**: API definitions for daemon communication
 - **aranya-keygen**: Key generation utilities
 - **aranya-util**: Common utilities
+- **aranya-rest**: REST API server for the daemon
 
 The architecture follows a client-daemon pattern where
 applications use the client library to communicate with a daemon
@@ -28,7 +29,7 @@ peer synchronization.
 
 ```bash
 cargo build --release
-# or using cargo-make
+# using cargo-make is preferred
 cargo make build
 ```
 
