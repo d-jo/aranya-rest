@@ -4,9 +4,9 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use aranya_client::Client;
+use aranya_client::{client::Client, SyncPeerConfig, TeamConfig};
 use aranya_daemon::{config::Config, Daemon, DaemonHandle};
-use aranya_daemon_api::{DeviceId, KeyBundle};
+use aranya_daemon_api::{DeviceId, KeyBundle, Role, TeamId};
 use aranya_rest::RestServer;
 use aranya_util::Addr;
 use backon::{ExponentialBuilder, Retryable as _};
@@ -15,11 +15,38 @@ use tempfile::TempDir;
 use tokio::{fs, time};
 use tracing::{info, instrument, trace};
 
+const SYNC_INTERVAL: Duration = Duration::from_millis(100);
 const SLEEP_INTERVAL: Duration = Duration::from_millis(250);
 
 #[derive(Serialize, Deserialize)]
 struct VersionResponse {
     version: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CreateTeamResponse {
+    team_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct CreateTeamRequest {
+    config: TeamConfigJson,
+}
+
+#[derive(Serialize, Deserialize)]
+struct TeamConfigJson {
+    // Currently empty but included for future extensibility
+}
+
+#[derive(Serialize, Deserialize)]
+struct AddDeviceRequest {
+    keys: KeyBundle,
+}
+
+#[derive(Serialize, Deserialize)]
+struct AssignRoleRequest {
+    device_id: String,
+    role: String,
 }
 
 #[instrument(skip_all)]
@@ -145,6 +172,82 @@ impl RestDeviceCtx {
         let version_response: VersionResponse = response.json().await?;
         Ok(version_response.version)
     }
+
+    // REST API methods for team operations
+    async fn rest_create_team(&self) -> Result<TeamId> {
+        let url = format!("http://{}/api/v1/teams", self.rest_server_addr);
+        let request = CreateTeamRequest {
+            config: TeamConfigJson {},
+        };
+        
+        let response = reqwest::Client::new()
+            .post(&url)
+            .json(&request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("Failed to create team: {}", response.status());
+        }
+
+        let team_response: CreateTeamResponse = response.json().await?;
+        let team_id_bytes = hex::decode(&team_response.team_id)?;
+        let mut array = [0u8; 32];
+        if team_id_bytes.len() != 32 {
+            anyhow::bail!("Invalid team ID length: expected 32 bytes, got {}", team_id_bytes.len());
+        }
+        array.copy_from_slice(&team_id_bytes);
+        Ok(TeamId::from(array))
+    }
+
+    async fn rest_add_device_to_team(&self, team_id: TeamId, device_keys: &KeyBundle) -> Result<()> {
+        let url = format!("http://{}/api/v1/teams/{}/devices", self.rest_server_addr, hex::encode(team_id.into_id().as_bytes()));
+        let request = AddDeviceRequest {
+            keys: device_keys.clone(),
+        };
+        
+        let response = reqwest::Client::new()
+            .post(&url)
+            .json(&request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("Failed to add device to team: {}", response.status());
+        }
+
+        Ok(())
+    }
+
+    async fn rest_assign_role(&self, team_id: TeamId, device_id: DeviceId, role: Role) -> Result<()> {
+        let url = format!("http://{}/api/v1/teams/{}/roles/assign", self.rest_server_addr, hex::encode(team_id.into_id().as_bytes()));
+        let role_str = match role {
+            Role::Owner => "Owner",
+            Role::Admin => "Admin", 
+            Role::Operator => "Operator",
+            Role::Member => "Member",
+        };
+        let request = AssignRoleRequest {
+            device_id: hex::encode(device_id.into_id().as_bytes()),
+            role: role_str.to_string(),
+        };
+        
+        let response = reqwest::Client::new()
+            .post(&url)
+            .json(&request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("Failed to assign role: {}", response.status());
+        }
+
+        Ok(())
+    }
+
+    async fn aranya_local_addr(&self) -> Result<SocketAddr> {
+        Ok(self.client.local_addr().await?)
+    }
 }
 
 #[tokio::test]
@@ -190,5 +293,199 @@ async fn test_rest_server_version_multi_daemon() -> Result<()> {
     
     info!("Successfully retrieved versions from both devices: {} and {}", version1, version2);
     
+    Ok(())
+}
+
+// REST-enabled Team Context - mirrors the TeamCtx pattern from aranya-client tests
+pub struct RestTeamCtx {
+    pub owner: RestDeviceCtx,
+    pub admin: RestDeviceCtx,
+    pub operator: RestDeviceCtx,
+    pub membera: RestDeviceCtx,
+    pub memberb: RestDeviceCtx,
+}
+
+impl RestTeamCtx {
+    pub async fn new(name: &str) -> Result<Self> {
+        info!("Creating RestTeamCtx for '{}'", name);
+        
+        let owner = RestDeviceCtx::new(&format!("{}-owner", name)).await?;
+        let admin = RestDeviceCtx::new(&format!("{}-admin", name)).await?;
+        let operator = RestDeviceCtx::new(&format!("{}-operator", name)).await?;
+        let membera = RestDeviceCtx::new(&format!("{}-membera", name)).await?;
+        let memberb = RestDeviceCtx::new(&format!("{}-memberb", name)).await?;
+
+        Ok(Self {
+            owner,
+            admin,
+            operator,
+            membera,
+            memberb,
+        })
+    }
+
+    fn devices(&mut self) -> [&mut RestDeviceCtx; 5] {
+        [
+            &mut self.owner,
+            &mut self.admin,
+            &mut self.operator,
+            &mut self.membera,
+            &mut self.memberb,
+        ]
+    }
+
+    pub async fn add_all_sync_peers(&mut self, team_id: TeamId) -> Result<()> {
+        let config = SyncPeerConfig::builder().interval(SYNC_INTERVAL).build()?;
+        let mut devices = self.devices();
+        for i in 0..devices.len() {
+            let (device, peers) = devices[i..].split_first_mut().expect("expected device");
+            for peer in peers {
+                device
+                    .client
+                    .team(team_id)
+                    .add_sync_peer(peer.aranya_local_addr().await?.into(), config.clone())
+                    .await?;
+                peer.client
+                    .team(team_id)
+                    .add_sync_peer(device.aranya_local_addr().await?.into(), config.clone())
+                    .await?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn add_all_device_roles_via_client(&mut self, team_id: TeamId) -> Result<()> {
+        // Use the client library approach (same as original TeamCtx)
+        let mut owner_team = self.owner.client.team(team_id);
+        let mut admin_team = self.admin.client.team(team_id);
+        let mut operator_team = self.operator.client.team(team_id);
+
+        // Add the admin as a new device, and assign its role.
+        info!("adding admin to team via client");
+        owner_team.add_device_to_team(self.admin.pk.clone()).await?;
+        owner_team.assign_role(self.admin.id, Role::Admin).await?;
+
+        sleep(SLEEP_INTERVAL).await;
+
+        // Add the operator as a new device.
+        info!("adding operator to team via client");
+        owner_team
+            .add_device_to_team(self.operator.pk.clone())
+            .await?;
+
+        sleep(SLEEP_INTERVAL).await;
+
+        // Assign the operator its role.
+        admin_team
+            .assign_role(self.operator.id, Role::Operator)
+            .await?;
+
+        sleep(SLEEP_INTERVAL).await;
+
+        // Add members as new devices.
+        info!("adding members to team via client");
+        operator_team
+            .add_device_to_team(self.membera.pk.clone())
+            .await?;
+
+        operator_team
+            .add_device_to_team(self.memberb.pk.clone())
+            .await?;
+
+        sleep(SLEEP_INTERVAL).await;
+
+        Ok(())
+    }
+
+    pub async fn add_all_device_roles_via_rest(&mut self, team_id: TeamId) -> Result<()> {
+        // Use the REST API approach
+        info!("adding admin to team via REST");
+        self.owner.rest_add_device_to_team(team_id, &self.admin.pk).await?;
+        self.owner.rest_assign_role(team_id, self.admin.id, Role::Admin).await?;
+
+        sleep(SLEEP_INTERVAL).await;
+
+        info!("adding operator to team via REST");
+        self.owner.rest_add_device_to_team(team_id, &self.operator.pk).await?;
+
+        sleep(SLEEP_INTERVAL).await;
+
+        self.admin.rest_assign_role(team_id, self.operator.id, Role::Operator).await?;
+
+        sleep(SLEEP_INTERVAL).await;
+
+        info!("adding members to team via REST");
+        self.operator.rest_add_device_to_team(team_id, &self.membera.pk).await?;
+        self.operator.rest_add_device_to_team(team_id, &self.memberb.pk).await?;
+
+        sleep(SLEEP_INTERVAL).await;
+
+        Ok(())
+    }
+}
+
+#[tokio::test]
+#[test_log::test]
+async fn test_rest_team_workflow_comprehensive() -> Result<()> {
+    info!("Starting comprehensive REST team workflow test");
+
+    // Create a team context with 5 devices, each with its own daemon and REST server
+    let mut team = RestTeamCtx::new("comprehensive-test").await?;
+
+    // Step 1: Create team via client library (owner)
+    info!("Creating team via client library");
+    let cfg = TeamConfig::builder().build()?;
+    let team_id = team
+        .owner
+        .client
+        .create_team(cfg)
+        .await
+        .expect("expected to create team");
+    info!("Created team with ID: {:?}", team_id);
+
+    // Step 2: Create team via REST API (owner) - verify consistency
+    info!("Creating team via REST API to verify consistency");
+    let rest_team_id = team.owner.rest_create_team().await?;
+    info!("Created team via REST with ID: {:?}", rest_team_id);
+
+    // Step 3: Set up sync peers between all devices
+    info!("Setting up sync peers");
+    team.add_all_sync_peers(team_id).await?;
+
+    // Step 4: Add devices and assign roles via client library
+    info!("Adding devices and assigning roles via client library");
+    team.add_all_device_roles_via_client(team_id).await?;
+
+    // Step 5: Create another team and use REST API for device management  
+    info!("Creating second team and using REST API for device management");
+    let rest_team_id2 = team.owner.rest_create_team().await?;
+    
+    // Set up sync peers for the second team as well
+    info!("Setting up sync peers for second team");
+    team.add_all_sync_peers(rest_team_id2).await?;
+    
+    // Allow time for all devices to learn about the new team
+    sleep(SLEEP_INTERVAL).await;
+    
+    team.add_all_device_roles_via_rest(rest_team_id2).await?;
+
+    // Step 6: Verify all devices can query the team via client library
+    info!("Verifying all devices can query team information");
+    for device in [&mut team.owner, &mut team.admin, &mut team.operator, &mut team.membera, &mut team.memberb] {
+        let mut queries = device.client.queries(team_id);
+        let devices_count = queries.devices_on_team().await?.iter().count();
+        info!("Device sees {} devices in team", devices_count);
+        assert_eq!(devices_count, 5, "All devices should see 5 devices in the team");
+    }
+
+    // Step 7: Verify REST endpoints work for all devices
+    info!("Verifying REST endpoints work for all devices");
+    for device in [&team.owner, &team.admin, &team.operator, &team.membera, &team.memberb] {
+        let version = device.get_version().await?;
+        assert!(!version.is_empty(), "Version should not be empty");
+        info!("Device REST server returned version: {}", version);
+    }
+
+    info!("Comprehensive REST team workflow test completed successfully!");
     Ok(())
 }
