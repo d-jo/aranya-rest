@@ -9,9 +9,10 @@ echo "🚀 Aranya REST API Full Integration Test"
 echo "========================================"
 echo ""
 
-# Configuration
-COUNT=2
-BASE_PORT=8080
+# Configuration - can be overridden by command line arguments
+COUNT=${1:-2}
+BASE_PORT=${2:-8080}
+KEEP_RUNNING=${3:-false}
 
 # Find binaries
 SCRIPT_DIR="$(dirname "$0")"
@@ -62,6 +63,8 @@ declare -a DAEMON_PIDS=()
 declare -a REST_PIDS=()
 declare -a PORTS=()
 declare -a UDS_PATHS=()
+declare -a DEVICE_IDS=()
+declare -a LOCAL_ADDRS=()
 
 # Cleanup function
 cleanup() {
@@ -97,6 +100,10 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 echo "🔧 Setting up $COUNT daemon instances..."
+echo "   Using ports $BASE_PORT-$((BASE_PORT + COUNT - 1))"
+if [[ "$KEEP_RUNNING" == "true" ]]; then
+    echo "   Will keep daemons running after test completion"
+fi
 
 # Create daemon instances
 for ((i=0; i<COUNT; i++)); do
@@ -218,47 +225,50 @@ make_request() {
 
 # Step 1: Test basic connectivity
 echo "📋 Step 1: Testing basic connectivity"
-echo "   Testing daemon-0 version..."
-if VERSION_0=$(make_request "http://127.0.0.1:8080/api/v1/version"); then
-    echo "   daemon-0: $(echo "$VERSION_0" | jq -r .version)"
-else
-    echo "❌ Step 1 failed!"
-    exit 1
-fi
-
-echo "   Testing daemon-1 version..."
-if VERSION_1=$(make_request "http://127.0.0.1:8081/api/v1/version"); then
-    echo "   daemon-1: $(echo "$VERSION_1" | jq -r .version)"
-else
-    echo "❌ Step 1 failed!"
-    exit 1
-fi
+for ((i=0; i<COUNT; i++)); do
+    PORT=$((BASE_PORT + i))
+    echo "   Testing daemon-$i version..."
+    if VERSION=$(make_request "http://127.0.0.1:$PORT/api/v1/version"); then
+        echo "   daemon-$i: $(echo "$VERSION" | jq -r .version)"
+    else
+        echo "❌ Step 1 failed for daemon-$i!"
+        exit 1
+    fi
+done
 echo "✅ Step 1 completed"
 echo ""
 
-# Step 2: Get device IDs
-echo "📋 Step 2: Getting device IDs"
-if DEVICE_0_RESP=$(make_request "http://127.0.0.1:8080/api/v1/device-id"); then
-    DEVICE_0=$(echo "$DEVICE_0_RESP" | jq -r .device_id)
-    echo "   Device 0: $DEVICE_0"
-else
-    echo "❌ Step 2 failed!"
-    exit 1
-fi
-
-if DEVICE_1_RESP=$(make_request "http://127.0.0.1:8081/api/v1/device-id"); then
-    DEVICE_1=$(echo "$DEVICE_1_RESP" | jq -r .device_id)
-    echo "   Device 1: $DEVICE_1"
-else
-    echo "❌ Step 2 failed!"
-    exit 1
-fi
+# Step 2: Get device IDs and local addresses
+echo "📋 Step 2: Getting device IDs and local addresses"
+for ((i=0; i<COUNT; i++)); do
+    PORT=$((BASE_PORT + i))
+    
+    # Get device ID
+    if DEVICE_RESP=$(make_request "http://127.0.0.1:$PORT/api/v1/device-id"); then
+        DEVICE_ID=$(echo "$DEVICE_RESP" | jq -r .device_id)
+        DEVICE_IDS+=("$DEVICE_ID")
+        echo "   Device $i: $DEVICE_ID"
+    else
+        echo "❌ Step 2 failed for daemon-$i device ID!"
+        exit 1
+    fi
+    
+    # Get local address for sync peers
+    if ADDR_RESP=$(make_request "http://127.0.0.1:$PORT/api/v1/local-addr"); then
+        LOCAL_ADDR=$(echo "$ADDR_RESP" | jq -r .address)
+        LOCAL_ADDRS+=("$LOCAL_ADDR")
+        echo "   Address $i: $LOCAL_ADDR"
+    else
+        echo "❌ Step 2 failed for daemon-$i local address!"
+        exit 1
+    fi
+done
 echo "✅ Step 2 completed"
 echo ""
 
 # Step 3: Create team on daemon-0
 echo "📋 Step 3: Creating team on daemon-0"
-if TEAM_RESPONSE=$(make_request "http://127.0.0.1:8080/api/v1/teams" "POST" '{"config":{}}'); then
+if TEAM_RESPONSE=$(make_request "http://127.0.0.1:$BASE_PORT/api/v1/teams" "POST" '{"config":{}}'); then
     TEAM_ID=$(echo "$TEAM_RESPONSE" | jq -r .team_id)
     echo "   Team ID: $TEAM_ID"
 else
@@ -268,29 +278,47 @@ fi
 echo "✅ Step 3 completed"
 echo ""
 
-# Step 4: Get daemon-1's key bundle
-echo "📋 Step 4: Getting daemon-1 key bundle"
-if KEYS=$(make_request "http://127.0.0.1:8081/api/v1/key-bundle"); then
-    echo "   Got key bundle ($(echo "$KEYS" | jq -r ".identity | length") bytes identity key)"
-    # Save for next step
-    echo "$KEYS" > "$WORK_DIR/keys.json"
-else
-    echo "❌ Step 4 failed!"
-    exit 1
-fi
+# Step 4: Add all other devices to the team
+echo "📋 Step 4: Adding devices to team"
+for ((i=1; i<COUNT; i++)); do
+    PORT=$((BASE_PORT + i))
+    echo "   Getting daemon-$i key bundle..."
+    
+    if KEYS=$(make_request "http://127.0.0.1:$PORT/api/v1/key-bundle"); then
+        echo "   Got key bundle for daemon-$i ($(echo "$KEYS" | jq -r ".identity | length") bytes identity key)"
+        
+        # Create the request payload
+        REQUEST_PAYLOAD=$(jq -n --argjson keys "$KEYS" '{"keys": $keys}')
+        
+        echo "   Adding daemon-$i to team..."
+        if ADD_RESPONSE=$(make_request "http://127.0.0.1:$BASE_PORT/api/v1/teams/$TEAM_ID/devices" "POST" "$REQUEST_PAYLOAD"); then
+            echo "   Successfully added daemon-$i to team"
+        else
+            echo "❌ Step 4 failed adding daemon-$i!"
+            exit 1
+        fi
+    else
+        echo "❌ Step 4 failed getting keys for daemon-$i!"
+        exit 1
+    fi
+done
 echo "✅ Step 4 completed"
 echo ""
 
-# Step 5: Add daemon-1 to team
-echo "📋 Step 5: Adding daemon-1 to team"
-KEYS=$(cat "$WORK_DIR/keys.json")
-
-# Create the request payload
-REQUEST_PAYLOAD=$(jq -n --argjson keys "$KEYS" '{"keys": $keys}')
-echo "   Payload prepared"
-
-if ADD_RESPONSE=$(make_request "http://127.0.0.1:8080/api/v1/teams/$TEAM_ID/devices" "POST" "$REQUEST_PAYLOAD"); then
-    echo "   Add device response: $ADD_RESPONSE"
+# Step 5: Verify devices on team
+echo "📋 Step 5: Verifying devices on team"
+if DEVICES=$(make_request "http://127.0.0.1:$BASE_PORT/api/v1/teams/$TEAM_ID/devices"); then
+    DEVICE_COUNT=$(echo "$DEVICES" | jq "length")
+    
+    echo "   Devices on team: $DEVICES"
+    echo "   Device count: $DEVICE_COUNT"
+    
+    if [[ "$DEVICE_COUNT" != "$COUNT" ]]; then
+        echo "❌ Expected $COUNT devices, got $DEVICE_COUNT"
+        exit 1
+    fi
+    
+    echo "   ✅ Correct number of devices on team!"
 else
     echo "❌ Step 5 failed!"
     exit 1
@@ -298,57 +326,77 @@ fi
 echo "✅ Step 5 completed"
 echo ""
 
-# Step 6: Verify devices on team
-echo "📋 Step 6: Verifying devices on team"
-if DEVICES=$(make_request "http://127.0.0.1:8080/api/v1/teams/$TEAM_ID/devices"); then
-    DEVICE_COUNT=$(echo "$DEVICES" | jq "length")
+# Step 6: Test querying device roles
+echo "📋 Step 6: Testing device role queries"
+
+# Query device roles
+for ((i=0; i<COUNT; i++)); do
+    DEVICE_ID="${DEVICE_IDS[$i]}"
     
-    echo "   Devices on team: $DEVICES"
-    echo "   Device count: $DEVICE_COUNT"
-    
-    if [[ "$DEVICE_COUNT" != "2" ]]; then
-        echo "❌ Expected 2 devices, got $DEVICE_COUNT"
+    if ROLE=$(make_request "http://127.0.0.1:$BASE_PORT/api/v1/teams/$TEAM_ID/devices/$DEVICE_ID/role"); then
+        ROLE_VALUE=$(echo "$ROLE" | jq -r .)
+        echo "   Device $i role: $ROLE_VALUE"
+        
+        # Device 0 should be Owner, others should be Member
+        if [[ $i -eq 0 ]]; then
+            if [[ "$ROLE_VALUE" != "Owner" ]]; then
+                echo "❌ Device 0 should be Owner, got: $ROLE_VALUE"
+                exit 1
+            fi
+        else
+            if [[ "$ROLE_VALUE" != "Member" ]]; then
+                echo "❌ Device $i should be Member, got: $ROLE_VALUE"
+                exit 1
+            fi
+        fi
+    else
+        echo "❌ Failed to query device $i role"
         exit 1
     fi
-    
-    echo "   ✅ Correct number of devices on team!"
-else
-    echo "❌ Step 6 failed!"
-    exit 1
-fi
+done
+
+echo "   ✅ Device roles are correct!"
 echo "✅ Step 6 completed"
 echo ""
 
-# Step 7: Test querying device role
-echo "📋 Step 7: Testing device role queries"
+# Step 7: Setup sync peers
+echo "📋 Step 7: Setting up sync peers"
+echo "   Setting up sync relationships between all daemons..."
 
-# Query device 0 role (should be Owner)
-if ROLE_0=$(make_request "http://127.0.0.1:8080/api/v1/teams/$TEAM_ID/devices/$DEVICE_0/role"); then
-    echo "   Device 0 role: $ROLE_0"
-else
-    echo "❌ Failed to query device 0 role"
-    exit 1
-fi
+# Add each daemon as a sync peer to all other daemons
+for ((i=0; i<COUNT; i++)); do
+    PORT_I=$((BASE_PORT + i))
+    
+    for ((j=0; j<COUNT; j++)); do
+        if [[ $i != $j ]]; then
+            LOCAL_ADDR_J="${LOCAL_ADDRS[$j]}"
+            
+            echo "   Adding daemon-$j as sync peer to daemon-$i..."
+            
+            # Create sync peer request
+            SYNC_PAYLOAD=$(jq -n \
+                --arg addr "$LOCAL_ADDR_J" \
+                --arg team_id "$TEAM_ID" \
+                '{
+                    "addr": $addr,
+                    "team_id": $team_id,
+                    "config": {
+                        "interval_secs": 5,
+                        "sync_now": false
+                    }
+                }')
+            
+            if SYNC_RESPONSE=$(make_request "http://127.0.0.1:$PORT_I/api/v1/sync/peers" "POST" "$SYNC_PAYLOAD"); then
+                echo "   ✅ daemon-$i ← daemon-$j"
+            else
+                echo "❌ Failed to add daemon-$j as sync peer to daemon-$i"
+                exit 1
+            fi
+        fi
+    done
+done
 
-# Query device 1 role (should be Member)
-if ROLE_1=$(make_request "http://127.0.0.1:8080/api/v1/teams/$TEAM_ID/devices/$DEVICE_1/role"); then
-    echo "   Device 1 role: $ROLE_1"
-else
-    echo "❌ Failed to query device 1 role"
-    exit 1
-fi
-
-if [[ "$(echo "$ROLE_0" | jq -r .)" != "Owner" ]]; then
-    echo "❌ Device 0 should be Owner, got: $ROLE_0"
-    exit 1
-fi
-
-if [[ "$(echo "$ROLE_1" | jq -r .)" != "Member" ]]; then
-    echo "❌ Device 1 should be Member, got: $ROLE_1"
-    exit 1
-fi
-
-echo "   ✅ Device roles are correct!"
+echo "   ✅ All sync peer relationships established!"
 echo "✅ Step 7 completed"
 echo ""
 
@@ -356,11 +404,83 @@ echo "🎉 All tests passed!"
 echo ""
 echo "📊 Test Summary:"
 echo "   • Created team: $TEAM_ID"
-echo "   • Device 0 (Owner): $DEVICE_0"
-echo "   • Device 1 (Member): $DEVICE_1" 
+echo "   • Total devices: $COUNT"
+for ((i=0; i<COUNT; i++)); do
+    ROLE="Owner"
+    if [[ $i -gt 0 ]]; then
+        ROLE="Member"
+    fi
+    echo "   • Device $i ($ROLE): ${DEVICE_IDS[$i]}"
+done
+echo "   • Sync peers: $((COUNT * (COUNT - 1))) relationships established"
 echo "   • All REST endpoints working correctly"
 echo "   • Device addition workflow successful"
+echo "   • Multi-daemon sync setup completed"
 echo ""
 echo "✅ Integration test completed successfully!"
+echo ""
+
+if [[ "$KEEP_RUNNING" == "true" ]]; then
+    echo "🔄 Keeping daemons running for interactive use..."
+    echo ""
+    echo "┌─────────────────────────────────────────────────────────────────┐"
+    echo "│                        DAEMON INFORMATION                       │"
+    echo "└─────────────────────────────────────────────────────────────────┘"
+    echo ""
+    
+    # Display daemon information in a nice table
+    printf "%-12s %-12s %-15s %-s\n" "Instance" "REST Port" "Local Address" "Device ID"
+    printf "%-12s %-12s %-15s %-s\n" "--------" "---------" "-------------" "---------"
+    for ((i=0; i<COUNT; i++)); do
+        PORT=$((BASE_PORT + i))
+        printf "%-12s %-12s %-15s %-s\n" "daemon-$i" "$PORT" "${LOCAL_ADDRS[$i]}" "${DEVICE_IDS[$i]}"
+    done
+    echo ""
+    
+    echo "🌐 REST API Base URLs:"
+    for ((i=0; i<COUNT; i++)); do
+        PORT=$((BASE_PORT + i))
+        echo "   • daemon-$i: http://127.0.0.1:$PORT/api/v1/"
+    done
+    echo ""
+    
+    echo "📋 Useful curl commands:"
+    echo "   # Get daemon version"
+    echo "   curl http://127.0.0.1:$BASE_PORT/api/v1/version"
+    echo ""
+    echo "   # List devices on the team"
+    echo "   curl http://127.0.0.1:$BASE_PORT/api/v1/teams/$TEAM_ID/devices"
+    echo ""
+    echo "   # Get device role"
+    echo "   curl http://127.0.0.1:$BASE_PORT/api/v1/teams/$TEAM_ID/devices/${DEVICE_IDS[0]}/role"
+    echo ""
+    echo "   # Trigger sync now"
+    echo "   curl -X POST http://127.0.0.1:$BASE_PORT/api/v1/sync/now \\"
+    echo "     -H 'Content-Type: application/json' \\"
+    echo "     -d '{\"addr\": \"${LOCAL_ADDRS[1]}\", \"team_id\": \"$TEAM_ID\"}'"
+    echo ""
+    
+    echo "📁 Working directory: $WORK_DIR"
+    echo "   (Will be cleaned up when you exit)"
+    echo ""
+    echo "🛑 Press Ctrl+C to stop all daemons and clean up"
+    echo ""
+    
+    # Disable automatic cleanup on exit for interactive mode
+    trap 'echo ""; echo "🛑 Stopping daemons and cleaning up..."; cleanup; exit 0' INT TERM
+    
+    # Wait indefinitely
+    echo "⏳ Daemons are running... (waiting for Ctrl+C)"
+    while true; do
+        sleep 1
+    done
+else
+    echo "💡 Usage: $0 [daemon_count] [base_port] [keep_running]"
+    echo "   Examples:"
+    echo "     $0                    # 2 daemons on ports 8080-8081"
+    echo "     $0 3                  # 3 daemons on ports 8080-8082"
+    echo "     $0 4 9000             # 4 daemons on ports 9000-9003"
+    echo "     $0 2 8080 true        # 2 daemons, keep running for interaction"
+fi
 
 # Cleanup will happen automatically via trap
