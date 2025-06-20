@@ -1331,7 +1331,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                 return;
             }
 
-            if (confirm(`Quick setup will:\n1. Create team "${teamName}" with ${runningNodes[0].name} as owner\n2. Add all ${runningNodes.length} nodes to the team\n3. Create full mesh sync connections\n\nProceed?`)) {
+            if (confirm(`Quick setup will:\n1. Create team "${teamName}" with ${runningNodes[0].name} as owner\n2. Add all ${runningNodes.length} nodes to the team\n3. Make owner sync peer for all members\n\nProceed?`)) {
                 // Step 1: Create team with first node as owner
                 const ownerNode = runningNodes[0];
                 ws.send(JSON.stringify({
@@ -1374,9 +1374,9 @@ async fn serve_basic_html() -> Html<&'static str> {
                 document.getElementById('teamSelector').value = teamId;
                 updateSelectedTeamInfo();
 
-                // Auto-sync all members
+                // Make owner sync peer for all members
                 setTimeout(() => {
-                    autoSyncTeamMembers();
+                    syncAllMembersFromOwner();
                 }, 2000); // Wait for joins to complete
             }, 1000);
 
