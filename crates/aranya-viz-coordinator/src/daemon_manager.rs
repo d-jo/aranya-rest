@@ -15,6 +15,8 @@ use uuid::Uuid;
 
 use crate::{AppState, Node, NodeStatus};
 
+const SYNC_PEER_ENDPOINT: &str = "/api/v1/sync/peers";
+
 /// Manages the lifecycle of daemon processes and their associated REST servers
 pub struct DaemonManager {
     state: AppState,
@@ -197,5 +199,186 @@ impl DaemonManager {
         
         // Fallback to system PATH
         Ok(PathBuf::from("aranya-rest"))
+    }
+
+    #[instrument(skip(self))]
+    pub async fn create_team(&self, node_id: Uuid, team_name: &str) -> Result<String> {
+        info!("Creating team '{}' for node {}", team_name, node_id);
+        
+        // Get the node's info
+        let node = {
+            let state = self.state.read().await;
+            state.nodes.get(&node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Node {} not found", node_id))?
+        };
+
+        // Make REST API call to create team
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/api/v1/teams", node.rest_port);
+        
+        let create_request = serde_json::json!({
+            "config": {}
+        });
+
+        let response = client
+            .post(&url)
+            .json(&create_request)
+            .send()
+            .await
+            .context("Failed to send create team request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to create team: {}", error_text);
+        }
+
+        let response_json: serde_json::Value = response.json().await
+            .context("Failed to parse create team response")?;
+        
+        let team_id = response_json["team_id"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("No team_id in response"))?
+            .to_string();
+
+        info!("Successfully created team '{}' with ID {} for node {}", team_name, team_id, node_id);
+        Ok(team_id)
+    }
+
+    #[instrument(skip(self))]
+    pub async fn join_team(&self, node_id: Uuid, team_id: &str, owner_node_id: Uuid) -> Result<()> {
+        info!("Node {} joining team {}", node_id, team_id);
+        
+        // Get both nodes' info
+        let (node, owner_node) = {
+            let state = self.state.read().await;
+            let node = state.nodes.get(&node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Node {} not found", node_id))?;
+            let owner = state.nodes.get(&owner_node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Owner node {} not found", owner_node_id))?;
+            (node, owner)
+        };
+
+        // First, get the key bundle from the joining node
+        let client = reqwest::Client::new();
+        let key_bundle_url = format!("http://127.0.0.1:{}/api/v1/key-bundle", node.rest_port);
+        
+        let key_response = client
+            .get(&key_bundle_url)
+            .send()
+            .await
+            .context("Failed to get key bundle from joining node")?;
+
+        if !key_response.status().is_success() {
+            anyhow::bail!("Failed to get key bundle from joining node");
+        }
+
+        let key_bundle: serde_json::Value = key_response.json().await
+            .context("Failed to parse key bundle response")?;
+
+        // Add the device to the team via the owner node
+        let add_device_url = format!("http://127.0.0.1:{}/api/v1/teams/{}/devices", owner_node.rest_port, team_id);
+        
+        let add_request = serde_json::json!({
+            "keys": key_bundle
+        });
+
+        let response = client
+            .post(&add_device_url)
+            .json(&add_request)
+            .send()
+            .await
+            .context("Failed to send join team request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to join team: {}", error_text);
+        }
+
+        info!("Successfully added node {} to team {}", node_id, team_id);
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    pub async fn configure_sync_peer(&self, from_node_id: Uuid, to_node_id: Uuid, team_id: &str) -> Result<()> {
+        info!("Configuring sync peer from {} to {}", from_node_id, to_node_id);
+        
+        // Get the nodes' info
+        let (from_node, to_node) = {
+            let state = self.state.read().await;
+            let from = state.nodes.get(&from_node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Source node {} not found", from_node_id))?;
+            let to = state.nodes.get(&to_node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Target node {} not found", to_node_id))?;
+            (from, to)
+        };
+
+        // Make REST API call to add sync peer
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}{}", from_node.rest_port, SYNC_PEER_ENDPOINT);
+        
+        // Create sync peer request using the actual team ID
+        let sync_peer_request = serde_json::json!({
+            "addr": format!("127.0.0.1:{}", to_node.daemon_port),
+            "team_id": team_id,
+            "config": {
+                "interval_secs": 30,
+                "sync_now": true
+            }
+        });
+
+        let response = client
+            .post(&url)
+            .json(&sync_peer_request)
+            .send()
+            .await
+            .context("Failed to send sync peer request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to add sync peer: {}", error_text);
+        }
+
+        info!("Successfully configured sync peer from {} to {}", from_node_id, to_node_id);
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    pub async fn remove_sync_peer(&self, from_node_id: Uuid, to_node_id: Uuid, team_id: &str) -> Result<()> {
+        info!("Removing sync peer from {} to {}", from_node_id, to_node_id);
+        
+        // Get the nodes' info
+        let (from_node, to_node) = {
+            let state = self.state.read().await;
+            let from = state.nodes.get(&from_node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Source node {} not found", from_node_id))?;
+            let to = state.nodes.get(&to_node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Target node {} not found", to_node_id))?;
+            (from, to)
+        };
+
+        // Make REST API call to remove sync peer
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}{}", from_node.rest_port, SYNC_PEER_ENDPOINT);
+        
+        // Use the actual team ID
+        let remove_request = serde_json::json!({
+            "addr": format!("127.0.0.1:{}", to_node.daemon_port),
+            "team_id": team_id
+        });
+
+        let response = client
+            .delete(&url)
+            .json(&remove_request)
+            .send()
+            .await
+            .context("Failed to send remove sync peer request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to remove sync peer: {}", error_text);
+        }
+
+        info!("Successfully removed sync peer from {} to {}", from_node_id, to_node_id);
+        Ok(())
     }
 }

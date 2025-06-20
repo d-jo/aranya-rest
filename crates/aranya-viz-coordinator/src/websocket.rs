@@ -106,6 +106,7 @@ async fn handle_message(
                     daemon_port,
                     rest_port,
                     status: NodeStatus::Stopped,
+                    teams: Vec::new(),
                 };
                 
                 state_guard.nodes.insert(node_id, node.clone());
@@ -149,13 +150,13 @@ async fn handle_message(
                 
                 // Remove all connections involving this node
                 let connections_to_remove: Vec<_> = state_guard.connections.keys()
-                    .filter(|(from, to)| *from == node_id || *to == node_id)
+                    .filter(|(from, to, _)| *from == node_id || *to == node_id)
                     .cloned()
                     .collect();
                 
-                for (from, to) in connections_to_remove {
-                    state_guard.connections.remove(&(from, to));
-                    let _ = tx.send(WsMessage::SyncConnectionRemoved { from, to });
+                for (from, to, team_id) in connections_to_remove {
+                    state_guard.connections.remove(&(from, to, team_id.clone()));
+                    let _ = tx.send(WsMessage::SyncConnectionRemoved { from, to, team_id });
                 }
             }
 
@@ -173,45 +174,175 @@ async fn handle_message(
             let _ = tx.send(WsMessage::NodeMoved { node_id, position });
         }
 
-        WsMessage::AddSyncConnection { from, to } => {
+        WsMessage::AddSyncConnection { from, to, team_id } => {
             let connection = SyncConnection {
                 from,
                 to,
+                team_id: team_id.clone(),
                 status: crate::ConnectionStatus::Pending,
             };
 
             {
                 let mut state_guard = state.write().await;
-                state_guard.connections.insert((from, to), connection.clone());
+                state_guard.connections.insert((from, to, team_id.clone()), connection.clone());
             }
 
-            let _ = tx.send(WsMessage::SyncConnectionAdded { connection });
+            let _ = tx.send(WsMessage::SyncConnectionAdded { connection: connection.clone() });
 
-            // TODO: Actually configure the sync connection between daemons
-            // This would involve making REST API calls to the daemon's sync endpoints
+            // Configure the actual sync connection
+            tokio::spawn({
+                let daemon_manager = daemon_manager.clone();
+                let state = state.clone();
+                let tx = tx.clone();
+                async move {
+                    match daemon_manager.configure_sync_peer(from, to, &team_id).await {
+                        Ok(_) => {
+                            // Update connection status
+                            {
+                                let mut state_guard = state.write().await;
+                                if let Some(conn) = state_guard.connections.get_mut(&(from, to, team_id.clone())) {
+                                    conn.status = crate::ConnectionStatus::Connected;
+                                }
+                            }
+                            let _ = tx.send(WsMessage::SyncConnectionStatusChanged {
+                                from,
+                                to,
+                                team_id: team_id.clone(),
+                                status: crate::ConnectionStatus::Connected,
+                            });
+                        }
+                        Err(e) => {
+                            error!("Failed to configure sync connection from {} to {}: {}", from, to, e);
+                            // Update connection status
+                            {
+                                let mut state_guard = state.write().await;
+                                if let Some(conn) = state_guard.connections.get_mut(&(from, to, team_id.clone())) {
+                                    conn.status = crate::ConnectionStatus::Failed(e.to_string());
+                                }
+                            }
+                            let _ = tx.send(WsMessage::SyncConnectionStatusChanged {
+                                from,
+                                to,
+                                team_id: team_id.clone(),
+                                status: crate::ConnectionStatus::Failed(e.to_string()),
+                            });
+                        }
+                    }
+                }
+            });
         }
 
-        WsMessage::RemoveSyncConnection { from, to } => {
+        WsMessage::RemoveSyncConnection { from, to, team_id } => {
             {
                 let mut state_guard = state.write().await;
-                state_guard.connections.remove(&(from, to));
+                state_guard.connections.remove(&(from, to, team_id.clone()));
             }
 
-            let _ = tx.send(WsMessage::SyncConnectionRemoved { from, to });
+            let _ = tx.send(WsMessage::SyncConnectionRemoved { from, to, team_id: team_id.clone() });
 
-            // TODO: Remove the sync connection from the daemons
+            // Remove the sync connection from the daemon
+            tokio::spawn({
+                let daemon_manager = daemon_manager.clone();
+                async move {
+                    if let Err(e) = daemon_manager.remove_sync_peer(from, to, &team_id).await {
+                        warn!("Failed to remove sync connection from {} to {}: {}", from, to, e);
+                    }
+                }
+            });
+        }
+
+        WsMessage::CreateTeam { node_id, team_name } => {
+            match daemon_manager.create_team(node_id, &team_name).await {
+                Ok(team_id) => {
+                    let team = crate::TeamInfo {
+                        id: team_id.clone(),
+                        name: team_name.clone(),
+                        role: Some("Owner".to_string()),
+                    };
+                    
+                    // Update node's teams
+                    {
+                        let mut state_guard = state.write().await;
+                        if let Some(node) = state_guard.nodes.get_mut(&node_id) {
+                            node.teams.push(team.clone());
+                        }
+                        
+                        // Add to global teams list
+                        state_guard.teams.insert(team_id.clone(), crate::Team {
+                            id: team_id.clone(),
+                            name: team_name.clone(),
+                            owner_node_id: node_id,
+                            members: vec![crate::TeamMember {
+                                node_id,
+                                role: "Owner".to_string(),
+                            }],
+                        });
+                    }
+
+                    let _ = tx.send(WsMessage::TeamCreated { node_id, team });
+                }
+                Err(e) => {
+                    error!("Failed to create team for node {}: {}", node_id, e);
+                    let _ = tx.send(WsMessage::Error { 
+                        message: format!("Failed to create team: {}", e) 
+                    });
+                }
+            }
+        }
+
+        WsMessage::JoinTeam { node_id, team_id, owner_node_id } => {
+            match daemon_manager.join_team(node_id, &team_id, owner_node_id).await {
+                Ok(_) => {
+                    let team_name = {
+                        let state_guard = state.read().await;
+                        state_guard.teams.get(&team_id).map(|t| t.name.clone())
+                            .unwrap_or_else(|| "Unknown Team".to_string())
+                    };
+                    
+                    let team = crate::TeamInfo {
+                        id: team_id.clone(),
+                        name: team_name,
+                        role: Some("Member".to_string()),
+                    };
+                    
+                    // Update node's teams
+                    {
+                        let mut state_guard = state.write().await;
+                        if let Some(node) = state_guard.nodes.get_mut(&node_id) {
+                            node.teams.push(team.clone());
+                        }
+                        
+                        // Add to team members
+                        if let Some(team_data) = state_guard.teams.get_mut(&team_id) {
+                            team_data.members.push(crate::TeamMember {
+                                node_id,
+                                role: "Member".to_string(),
+                            });
+                        }
+                    }
+
+                    let _ = tx.send(WsMessage::TeamJoined { node_id, team });
+                }
+                Err(e) => {
+                    error!("Failed to join team for node {}: {}", node_id, e);
+                    let _ = tx.send(WsMessage::Error { 
+                        message: format!("Failed to join team: {}", e) 
+                    });
+                }
+            }
         }
 
         WsMessage::GetState => {
-            let (nodes, connections) = {
+            let (nodes, connections, teams) = {
                 let state_guard = state.read().await;
                 (
                     state_guard.nodes.values().cloned().collect(),
                     state_guard.connections.values().cloned().collect(),
+                    state_guard.teams.values().cloned().collect(),
                 )
             };
 
-            let _ = tx.send(WsMessage::State { nodes, connections });
+            let _ = tx.send(WsMessage::State { nodes, connections, teams });
         }
 
         _ => {

@@ -21,6 +21,15 @@ pub struct Node {
     pub daemon_port: u16,
     pub rest_port: u16,
     pub status: NodeStatus,
+    pub teams: Vec<TeamInfo>, // Teams this node belongs to
+}
+
+/// Team information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamInfo {
+    pub id: String,
+    pub name: String,
+    pub role: Option<String>, // Owner, Admin, Operator, Member
 }
 
 /// Position on the canvas
@@ -44,6 +53,7 @@ pub enum NodeStatus {
 pub struct SyncConnection {
     pub from: Uuid, // The node that requested the sync
     pub to: Uuid,   // The node that is being synced to
+    pub team_id: String, // The team this sync is for
     pub status: ConnectionStatus,
 }
 
@@ -63,22 +73,51 @@ pub enum WsMessage {
     CreateNode { name: String, position: Position },
     DeleteNode { node_id: Uuid },
     MoveNode { node_id: Uuid, position: Position },
-    AddSyncConnection { from: Uuid, to: Uuid },
-    RemoveSyncConnection { from: Uuid, to: Uuid },
+    AddSyncConnection { from: Uuid, to: Uuid, team_id: String },
+    RemoveSyncConnection { from: Uuid, to: Uuid, team_id: String },
+    
+    // Team operations
+    CreateTeam { node_id: Uuid, team_name: String },
+    JoinTeam { node_id: Uuid, team_id: String, owner_node_id: Uuid },
+    LeaveTeam { node_id: Uuid, team_id: String },
+    AssignRole { node_id: Uuid, team_id: String, target_node_id: Uuid, role: String },
     
     // Server -> Client
     NodeCreated { node: Node },
     NodeDeleted { node_id: Uuid },
     NodeMoved { node_id: Uuid, position: Position },
     NodeStatusChanged { node_id: Uuid, status: NodeStatus },
+    NodeTeamsChanged { node_id: Uuid, teams: Vec<TeamInfo> },
     SyncConnectionAdded { connection: SyncConnection },
-    SyncConnectionRemoved { from: Uuid, to: Uuid },
-    SyncConnectionStatusChanged { from: Uuid, to: Uuid, status: ConnectionStatus },
+    SyncConnectionRemoved { from: Uuid, to: Uuid, team_id: String },
+    SyncConnectionStatusChanged { from: Uuid, to: Uuid, team_id: String, status: ConnectionStatus },
+    
+    // Team events
+    TeamCreated { node_id: Uuid, team: TeamInfo },
+    TeamJoined { node_id: Uuid, team: TeamInfo },
+    TeamLeft { node_id: Uuid, team_id: String },
+    RoleAssigned { node_id: Uuid, team_id: String, role: String },
     
     // Bidirectional
     GetState,
-    State { nodes: Vec<Node>, connections: Vec<SyncConnection> },
+    State { nodes: Vec<Node>, connections: Vec<SyncConnection>, teams: Vec<Team> },
     Error { message: String },
+}
+
+/// Team representation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Team {
+    pub id: String,
+    pub name: String,
+    pub owner_node_id: Uuid,
+    pub members: Vec<TeamMember>,
+}
+
+/// Team member
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TeamMember {
+    pub node_id: Uuid,
+    pub role: String,
 }
 
 /// Shared application state
@@ -87,7 +126,8 @@ pub type AppState = Arc<RwLock<AppStateInner>>;
 #[derive(Debug)]
 pub struct AppStateInner {
     pub nodes: HashMap<Uuid, Node>,
-    pub connections: HashMap<(Uuid, Uuid), SyncConnection>,
+    pub connections: HashMap<(Uuid, Uuid, String), SyncConnection>, // (from, to, team_id)
+    pub teams: HashMap<String, Team>,
     pub port_allocator: PortAllocator,
 }
 
@@ -96,6 +136,7 @@ impl AppStateInner {
         Self {
             nodes: HashMap::new(),
             connections: HashMap::new(),
+            teams: HashMap::new(),
             port_allocator: PortAllocator::new(8000, 9000), // Use ports 8000-8999 for daemons, 9000-9999 for REST
         }
     }
