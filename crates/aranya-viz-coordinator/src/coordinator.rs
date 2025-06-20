@@ -345,12 +345,21 @@ async fn serve_basic_html() -> Html<&'static str> {
                 <button onclick="addAllNodesToSelectedTeam()" style="padding: 8px; background: #4CAF50; color: white; border: none; border-radius: 4px;">
                     Add All Nodes to Selected Team
                 </button>
-                <button onclick="autoSyncTeamMembers()" style="padding: 8px; background: #2196F3; color: white; border: none; border-radius: 4px;">
+                <button onclick="autoSyncTeamMembers()" style="padding: 8px; background: #2196F3; color: white; border: none; border-radius: 4px;" title="Create bidirectional sync connections between all team members (full mesh)">
                     Auto-Sync All Team Members
+                </button>
+                <button onclick="syncAllMembersFromOwner()" style="padding: 8px; background: #9C27B0; color: white; border: none; border-radius: 4px;" title="Create sync connections from all team members to the owner. This ensures members receive owner commands for team management operations.">
+                    Make Owner Sync Peer for All
                 </button>
                 <button onclick="quickTeamSetup()" style="padding: 8px; background: #FF9800; color: white; border: none; border-radius: 4px;">
                     Quick Team Setup (All Nodes)
                 </button>
+            </div>
+            <div style="font-size: 11px; color: #666; margin-top: 10px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
+                <strong>Sync Types:</strong><br>
+                • <span style="color: #2196F3;">Auto-Sync All</span>: Full mesh (bidirectional)<br>
+                • <span style="color: #9C27B0;">Owner Sync Peer</span>: Owner → Members (command flow)<br>
+                <em>Arrows show data/command flow direction</em>
             </div>
         </div>
         
@@ -560,7 +569,8 @@ async fn serve_basic_html() -> Html<&'static str> {
                     if (fromNode && toNode) {
                         const color = conn.status === 'Connected' ? '#4CAF50' : 
                                      conn.status === 'Failed' ? '#F44336' : '#FF9800';
-                        drawArrow(fromNode.position, toNode.position, color);
+                        // Draw arrow from source (to) to syncer (from) to show data flow direction
+                        drawArrow(toNode.position, fromNode.position, color);
                     }
                 });
             }
@@ -873,7 +883,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             } else if (tool === 'place') {
                 header.textContent = 'Click on empty space to place a new node.';
             } else if (tool === 'connect') {
-                header.textContent = 'Click on source node, then click on target node to create sync connection.';
+                header.textContent = 'Click on receiver node, then click on source node. Arrow shows data flow direction.';
             }
             
             draw();
@@ -1245,6 +1255,61 @@ async fn serve_basic_html() -> Html<&'static str> {
                         team_id: selectedTeamId
                     }));
                 });
+            }
+        }
+
+        function syncAllMembersFromOwner() {
+            if (!selectedTeamId) {
+                alert('Please select a team first from the Sync Operations dropdown.');
+                return;
+            }
+
+            const team = teams.get(selectedTeamId);
+            if (!team) {
+                alert('Selected team not found.');
+                return;
+            }
+
+            // Find the owner node
+            const ownerNode = nodes.get(team.owner_node_id);
+            if (!ownerNode || ownerNode.status !== 'Running') {
+                alert('Team owner node is not running. Cannot create sync connections.');
+                return;
+            }
+
+            // Find all other team members (excluding owner)
+            const memberNodes = [];
+            nodes.forEach(node => {
+                if (node.status === 'Running' && 
+                    node.id !== team.owner_node_id &&
+                    node.teams && 
+                    node.teams.some(t => t.id === selectedTeamId)) {
+                    memberNodes.push(node);
+                }
+            });
+
+            if (memberNodes.length === 0) {
+                alert('No other running team members found. Add more nodes to the team first.');
+                return;
+            }
+
+            const connectionCount = memberNodes.length;
+            const ownerName = ownerNode.name;
+            const memberNames = memberNodes.map(n => n.name).join(', ');
+
+            if (confirm(`Make ${ownerName} (Owner) a sync peer for ${connectionCount} team members?\n\nThis will create sync connections FROM each member TO the owner:\n${memberNames}\n\nThis ensures all members receive commands from the owner.`)) {
+                // Create sync connections from each member to the owner
+                // This means each member will sync FROM the owner (receive owner's commands)
+                memberNodes.forEach(memberNode => {
+                    ws.send(JSON.stringify({
+                        type: 'AddSyncConnection',
+                        from: memberNode.id,      // Member syncs FROM owner
+                        to: ownerNode.id,         // TO the owner
+                        team_id: selectedTeamId
+                    }));
+                });
+
+                alert(`Creating ${connectionCount} sync connections from team members to owner ${ownerName}. This will help ensure all members receive owner commands for team management.`);
             }
         }
 
