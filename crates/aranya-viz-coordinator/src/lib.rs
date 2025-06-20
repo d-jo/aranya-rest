@@ -1,0 +1,136 @@
+use std::{
+    collections::HashMap,
+    sync::Arc,
+};
+
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
+use uuid::Uuid;
+
+pub mod coordinator;
+pub mod daemon_manager;
+pub mod websocket;
+
+/// Represents a node in the visualization
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Node {
+    pub id: Uuid,
+    pub name: String,
+    pub position: Position,
+    pub daemon_port: u16,
+    pub rest_port: u16,
+    pub status: NodeStatus,
+}
+
+/// Position on the canvas
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Position {
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Node status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum NodeStatus {
+    Stopped,
+    Starting,
+    Running,
+    Error(String),
+}
+
+/// Sync connection between two nodes
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncConnection {
+    pub from: Uuid, // The node that requested the sync
+    pub to: Uuid,   // The node that is being synced to
+    pub status: ConnectionStatus,
+}
+
+/// Connection status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ConnectionStatus {
+    Pending,
+    Connected,
+    Failed(String),
+}
+
+/// WebSocket message types
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum WsMessage {
+    // Client -> Server
+    CreateNode { name: String, position: Position },
+    DeleteNode { node_id: Uuid },
+    MoveNode { node_id: Uuid, position: Position },
+    AddSyncConnection { from: Uuid, to: Uuid },
+    RemoveSyncConnection { from: Uuid, to: Uuid },
+    
+    // Server -> Client
+    NodeCreated { node: Node },
+    NodeDeleted { node_id: Uuid },
+    NodeMoved { node_id: Uuid, position: Position },
+    NodeStatusChanged { node_id: Uuid, status: NodeStatus },
+    SyncConnectionAdded { connection: SyncConnection },
+    SyncConnectionRemoved { from: Uuid, to: Uuid },
+    SyncConnectionStatusChanged { from: Uuid, to: Uuid, status: ConnectionStatus },
+    
+    // Bidirectional
+    GetState,
+    State { nodes: Vec<Node>, connections: Vec<SyncConnection> },
+    Error { message: String },
+}
+
+/// Shared application state
+pub type AppState = Arc<RwLock<AppStateInner>>;
+
+#[derive(Debug)]
+pub struct AppStateInner {
+    pub nodes: HashMap<Uuid, Node>,
+    pub connections: HashMap<(Uuid, Uuid), SyncConnection>,
+    pub port_allocator: PortAllocator,
+}
+
+impl AppStateInner {
+    pub fn new() -> Self {
+        Self {
+            nodes: HashMap::new(),
+            connections: HashMap::new(),
+            port_allocator: PortAllocator::new(8000, 9000), // Use ports 8000-8999 for daemons, 9000-9999 for REST
+        }
+    }
+}
+
+/// Simple port allocator
+#[derive(Debug)]
+pub struct PortAllocator {
+    daemon_next: u16,
+    rest_next: u16,
+    daemon_max: u16,
+    rest_max: u16,
+}
+
+impl PortAllocator {
+    pub fn new(daemon_start: u16, rest_start: u16) -> Self {
+        Self {
+            daemon_next: daemon_start,
+            rest_next: rest_start,
+            daemon_max: daemon_start + 999,
+            rest_max: rest_start + 999,
+        }
+    }
+    
+    pub fn allocate_ports(&mut self) -> Result<(u16, u16)> {
+        if self.daemon_next >= self.daemon_max || self.rest_next >= self.rest_max {
+            anyhow::bail!("Port range exhausted");
+        }
+        
+        let daemon_port = self.daemon_next;
+        let rest_port = self.rest_next;
+        
+        self.daemon_next += 1;
+        self.rest_next += 1;
+        
+        Ok((daemon_port, rest_port))
+    }
+}
