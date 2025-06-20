@@ -101,6 +101,15 @@ impl RestServer {
                 "/api/v1/teams/{team_id}/labels/revoke",
                 post(handlers::revoke_label),
             )
+            // Message management
+            .route(
+                "/api/v1/teams/{team_id}/messages",
+                post(handlers::send_message),
+            )
+            .route(
+                "/api/v1/teams/{team_id}/messages",
+                get(handlers::query_messages),
+            )
             .layer(ServiceBuilder::new().layer(CorsLayer::permissive()))
             .with_state(self.daemon_client.clone())
     }

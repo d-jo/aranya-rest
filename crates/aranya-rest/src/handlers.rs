@@ -142,6 +142,24 @@ pub struct ReceiveCtrlResponse {
     pub psks: Value,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct SendMessageRequest {
+    pub text: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SendMessageResponse {
+    pub message_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct MessageResponse {
+    pub id: String,
+    pub author_id: String,
+    pub text: String,
+    pub timestamp: u64,
+}
+
 // Helper functions for type conversions
 fn parse_team_id(id_str: &str) -> Result<TeamId, RestError> {
     let bytes = hex::decode(id_str)
@@ -594,4 +612,46 @@ pub async fn query_labels(
         .await??;
 
     Ok(Json(labels))
+}
+
+pub async fn send_message(
+    State(client): State<DaemonClient>,
+    Path(team_id): Path<String>,
+    Json(req): Json<SendMessageRequest>,
+) -> Result<Json<SendMessageResponse>, RestError> {
+    let team_id = parse_team_id(&team_id)?;
+    let message_id = client
+        .client()
+        .send_message(DaemonClient::context(), team_id, req.text)
+        .await??;
+
+    Ok(Json(SendMessageResponse {
+        message_id: hex::encode(message_id.into_id().as_bytes()),
+    }))
+}
+
+pub async fn query_messages(
+    State(client): State<DaemonClient>,
+    Path(team_id): Path<String>,
+) -> Result<Json<Vec<MessageResponse>>, RestError> {
+    let team_id = parse_team_id(&team_id)?;
+    
+    // Default limit of 50 messages, can be made configurable later
+    let limit = 50;
+    let messages = client
+        .client()
+        .query_messages(DaemonClient::context(), team_id, limit)
+        .await??;
+
+    let message_responses: Vec<MessageResponse> = messages
+        .into_iter()
+        .map(|msg| MessageResponse {
+            id: hex::encode(msg.id.into_id().as_bytes()),
+            author_id: hex::encode(msg.author_id.into_id().as_bytes()),
+            text: msg.text,
+            timestamp: msg.timestamp,
+        })
+        .collect();
+
+    Ok(Json(message_responses))
 }

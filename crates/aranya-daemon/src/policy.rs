@@ -62,6 +62,8 @@ pub enum Effect {
     QueryDeviceRoleResult(QueryDeviceRoleResult),
     QueryDeviceKeyBundleResult(QueryDeviceKeyBundleResult),
     QueryAqcNetIdentifierResult(QueryAqcNetIdentifierResult),
+    MessageSent(MessageSent),
+    QueriedMessage(QueriedMessage),
     QueryAqcNetworkNamesOutput(QueryAqcNetworkNamesOutput),
 }
 /// TeamCreated policy effect.
@@ -253,6 +255,22 @@ pub struct QueryDeviceKeyBundleResult {
 pub struct QueryAqcNetIdentifierResult {
     pub net_identifier: String,
 }
+/// MessageSent policy effect.
+#[effect]
+pub struct MessageSent {
+    pub message_id: Id,
+    pub author_id: Id,
+    pub text: String,
+    pub timestamp: i64,
+}
+/// QueriedMessage policy effect.
+#[effect]
+pub struct QueriedMessage {
+    pub message_id: Id,
+    pub author_id: Id,
+    pub text: String,
+    pub timestamp: i64,
+}
 /// QueryAqcNetworkNamesOutput policy effect.
 #[effect]
 pub struct QueryAqcNetworkNamesOutput {
@@ -305,5 +323,7 @@ pub trait ActorExt {
     fn query_device_role(&mut self, device_id: Id) -> Result<(), ClientError>;
     fn query_device_keybundle(&mut self, device_id: Id) -> Result<(), ClientError>;
     fn query_aqc_net_identifier(&mut self, device_id: Id) -> Result<(), ClientError>;
+    fn send_message(&mut self, text: String, timestamp: i64) -> Result<(), ClientError>;
+    fn query_messages(&mut self, limit: i64) -> Result<(), ClientError>;
     fn query_aqc_network_names(&mut self) -> Result<(), ClientError>;
 }

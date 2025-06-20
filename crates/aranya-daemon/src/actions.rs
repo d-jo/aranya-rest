@@ -494,6 +494,35 @@ where
         })
         .in_current_span()
     }
+
+    /// Send a message to the team.
+    #[instrument(skip(self), fields(text = %text))]
+    fn send_message(&self, text: String) -> impl Future<Output = Result<Vec<Effect>>> + Send {
+        self.with_actor(move |actor| {
+            // Get current timestamp in seconds since Unix epoch
+            let timestamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs() as i64;
+            actor.send_message(text, timestamp)?;
+            Ok(())
+        })
+        .in_current_span()
+    }
+
+    /// Query messages off-graph.
+    #[allow(clippy::type_complexity)]
+    #[instrument(skip(self))]
+    fn query_messages_off_graph(
+        &self,
+        limit: i64,
+    ) -> impl Future<Output = Result<(Vec<Box<[u8]>>, Vec<Effect>)>> + Send {
+        self.session_action(move || VmAction {
+            name: "query_messages",
+            args: Cow::Owned(vec![Value::from(limit)]),
+        })
+        .in_current_span()
+    }
 }
 
 /// An implementation of [`Actor`].

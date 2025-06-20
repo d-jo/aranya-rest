@@ -208,6 +208,8 @@ impl EffectHandler {
                 QueriedLabelAssignment(_) => {}
                 QueryLabelExistsResult(_) => {}
                 QueryAqcNetworkNamesOutput(_) => {}
+                MessageSent(_) => {}
+                QueriedMessage(_) => {}
             }
         }
         Ok(())
@@ -923,6 +925,60 @@ impl DaemonApi for Api {
             }
         }
         Ok(labels)
+    }
+
+    /// Send a message to the team.
+    #[instrument(skip(self))]
+    async fn send_message(
+        self,
+        _: context::Context,
+        team: api::TeamId,
+        text: String,
+    ) -> api::Result<api::MessageId> {
+        self.check_team_valid(team).await?;
+
+        let effects = self
+            .client
+            .actions(&team.into_id().into())
+            .send_message(text)
+            .await
+            .context("unable to send message")?;
+        if let Some(Effect::MessageSent(e)) = find_effect!(&effects, Effect::MessageSent(_e)) {
+            Ok(e.message_id.into())
+        } else {
+            Err(anyhow!("unable to send message").into())
+        }
+    }
+
+    /// Query messages from the team.
+    #[instrument(skip(self))]
+    async fn query_messages(
+        self,
+        _: context::Context,
+        team: api::TeamId,
+        limit: u32,
+    ) -> api::Result<Vec<api::Message>> {
+        self.check_team_valid(team).await?;
+
+        let (_ctrl, effects) = self
+            .client
+            .actions(&team.into_id().into())
+            .query_messages_off_graph(limit as i64)
+            .await
+            .context("unable to query messages")?;
+        let mut messages: Vec<api::Message> = Vec::new();
+        for e in effects {
+            if let Effect::QueriedMessage(e) = e {
+                debug!("found message: {}", e.message_id);
+                messages.push(api::Message {
+                    id: e.message_id.into(),
+                    author_id: e.author_id.into(),
+                    text: e.text,
+                    timestamp: e.timestamp as u64,
+                });
+            }
+        }
+        Ok(messages)
     }
 }
 

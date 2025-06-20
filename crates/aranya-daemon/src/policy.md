@@ -2156,6 +2156,127 @@ command QueryAqcNetIdentifier {
 - For a net identifier to be returned, it must have been created with the `SetAqcNetworkName` command.
 - If `UnsetAqcNetworkName` has been invoked for the device, no network identifier will be returned.
 
+## SendMessage
+
+Sends a plaintext broadcast message to all team members.
+
+```policy
+// A plaintext message sent to the team.
+fact Message[message_id id]=>{author_id id, text string, timestamp int}
+
+// Sends a message to all team members.
+action send_message(text string, timestamp int) {
+    publish SendMessage {
+        text: text,
+        timestamp: timestamp,
+    }
+}
+
+// A message was sent to the team.
+effect MessageSent {
+    message_id id,
+    author_id id,
+    text string,
+    timestamp int,
+}
+
+command SendMessage {
+    fields {
+        // The message text.
+        text string,
+        // Unix timestamp when the message was sent.
+        timestamp int,
+    }
+
+    seal { return seal_command(serialize(this)) }
+    open { return deserialize(open_envelope(envelope)) }
+
+    policy {
+        check team_exists()
+
+        let author = get_valid_device(envelope::author_id(envelope))
+        let message_id = envelope::command_id(envelope)
+
+        // All team members can send messages
+        finish {
+            create Message[message_id: message_id]=>{
+                author_id: author.device_id,
+                text: this.text,
+                timestamp: this.timestamp,
+            }
+
+            emit MessageSent {
+                message_id: message_id,
+                author_id: author.device_id,
+                text: this.text,
+                timestamp: this.timestamp,
+            }
+        }
+    }
+}
+```
+
+**Invariants**:
+
+- Any team member can send messages.
+- Messages are identified by the command ID that created them.
+- Messages include a timestamp for ordering.
+
+## QueryMessages
+
+Queries recent messages from the team.
+
+```policy
+// Queries recent messages.
+action query_messages(limit int) {
+    map Message[message_id: ?] as msg {
+        publish QueryMessage {
+            message_id: msg.message_id,
+            author_id: msg.author_id,
+            text: msg.text,
+            timestamp: msg.timestamp,
+        }
+    }
+}
+
+effect QueriedMessage {
+    message_id id,
+    author_id id,
+    text string,
+    timestamp int,
+}
+
+command QueryMessage {
+    fields {
+        message_id id,
+        author_id id,
+        text string,
+        timestamp int,
+    }
+
+    seal { return seal_command(serialize(this)) }
+    open { return deserialize(open_envelope(envelope)) }
+
+    policy {
+        check team_exists()
+
+        finish {
+            emit QueriedMessage {
+                message_id: this.message_id,
+                author_id: this.author_id,
+                text: this.text,
+                timestamp: this.timestamp,
+            }
+        }
+    }
+}
+```
+
+**Invariants**:
+
+- Any team member can query messages.
+- Messages are returned in the order they appear in the fact database.
+
 ## QueryAqcNetworkNames
 
 Queries all associated AQC network names from the fact database.

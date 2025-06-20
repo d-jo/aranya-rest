@@ -1040,6 +1040,26 @@ struct RevokeRoleRequest {
     role: String,
 }
 
+// ====== Message Types ======
+
+#[derive(Serialize, Deserialize)]
+struct SendMessageRequest {
+    text: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SendMessageResponse {
+    message_id: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct MessageResponse {
+    id: String,
+    author_id: String,
+    text: String,
+    timestamp: u64,
+}
+
 impl RestDeviceCtx {
     async fn rest_revoke_role(&self, team_id: TeamId, device_id: DeviceId, role: Role) -> Result<()> {
         let url = format!("http://{}/api/v1/teams/{}/roles/revoke", self.rest_server_addr, hex::encode(team_id.into_id().as_bytes()));
@@ -1065,6 +1085,68 @@ impl RestDeviceCtx {
         }
 
         Ok(())
+    }
+
+    // ====== Message Methods ======
+
+    async fn rest_send_message(&self, team_id: TeamId, text: &str) -> Result<String> {
+        let url = format!("http://{}/api/v1/teams/{}/messages", 
+            self.rest_server_addr, 
+            hex::encode(team_id.into_id().as_bytes())
+        );
+        let request = SendMessageRequest {
+            text: text.to_string(),
+        };
+        
+        let response = reqwest::Client::new()
+            .post(&url)
+            .json(&request)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("Failed to send message: {}", response.status());
+        }
+
+        let message_response: SendMessageResponse = response.json().await?;
+        Ok(message_response.message_id)
+    }
+
+    async fn rest_query_messages(&self, team_id: TeamId) -> Result<Vec<MessageResponse>> {
+        let url = format!("http://{}/api/v1/teams/{}/messages", 
+            self.rest_server_addr, 
+            hex::encode(team_id.into_id().as_bytes())
+        );
+        
+        let response = reqwest::get(&url).await?;
+        
+        if !response.status().is_success() {
+            anyhow::bail!("Failed to query messages: {}", response.status());
+        }
+
+        let messages: Vec<MessageResponse> = response.json().await?;
+        Ok(messages)
+    }
+
+    async fn rest_query_messages_with_retry(&self, team_id: TeamId) -> Result<Vec<MessageResponse>> {
+        let mut attempts = 0;
+        let max_retries = 5;
+        
+        loop {
+            match self.rest_query_messages(team_id).await {
+                Ok(result) => return Ok(result),
+                Err(err) => {
+                    let err_str = err.to_string();
+                    if (err_str.contains("storage error") || err_str.contains("no such storage")) && attempts < max_retries {
+                        info!("Storage error on attempt {}/{}, retrying after {:?}: {}", attempts + 1, max_retries + 1, SLEEP_INTERVAL, err_str);
+                        attempts += 1;
+                        sleep(SLEEP_INTERVAL).await;
+                    } else {
+                        return Err(err);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1152,5 +1234,165 @@ async fn test_role_management_comprehensive() -> Result<()> {
     assert_eq!(operator_role_after_revoke, Role::Member, "Operator should be Member after role revocation");
     
     info!("Comprehensive role management test completed successfully");
+    Ok(())
+}
+
+// ====== Message Management Tests ======
+
+#[test_log::test(tokio::test)]
+async fn test_rest_messaging_single_device() -> Result<()> {
+    info!("Starting single device messaging test");
+    
+    let device = RestDeviceCtx::new("message-single-device").await?;
+    
+    // Create a team
+    let team_id = device.rest_create_team().await?;
+    info!("Created team: {:?}", team_id);
+    
+    // Send a message via REST API
+    let message_text = "Hello from REST API!";
+    let message_id = device.rest_send_message(team_id, message_text).await?;
+    info!("Sent message with ID: {}", message_id);
+    
+    // Verify message ID is valid hex
+    assert!(!message_id.is_empty(), "Message ID should not be empty");
+    hex::decode(&message_id).expect("Message ID should be valid hex");
+    
+    // Query messages via REST API
+    let messages = device.rest_query_messages(team_id).await?;
+    info!("Found {} messages", messages.len());
+    
+    // Should have exactly 1 message
+    assert_eq!(messages.len(), 1, "Should have exactly 1 message");
+    
+    let message = &messages[0];
+    assert_eq!(message.text, message_text, "Message text should match");
+    assert_eq!(message.id, message_id, "Message ID should match");
+    assert_eq!(message.author_id, hex::encode(device.id.into_id().as_bytes()), "Author ID should match device ID");
+    assert!(message.timestamp > 0, "Timestamp should be positive");
+    
+    info!("Single device messaging test completed successfully");
+    Ok(())
+}
+
+#[test_log::test(tokio::test)]
+async fn test_rest_messaging_multi_device() -> Result<()> {
+    info!("Starting multi-device messaging test");
+    
+    let device1 = RestDeviceCtx::new("message-device-1").await?;
+    let device2 = RestDeviceCtx::new("message-device-2").await?;
+    
+    // Create team on device1
+    let team_id = device1.rest_create_team().await?;
+    
+    // Add device2 to team
+    device1.rest_add_device_to_team(team_id, &device2.pk).await?;
+    
+    // Set up sync peers
+    let device1_addr = device1.get_local_addr().await?;
+    let device2_addr = device2.get_local_addr().await?;
+    
+    info!("Setting up sync peers for message synchronization");
+    device1.rest_add_sync_peer(team_id, &device2_addr, Some(1)).await?;
+    device2.rest_add_sync_peer(team_id, &device1_addr, Some(1)).await?;
+    
+    // Wait for sync to establish
+    sleep(LONG_SLEEP_INTERVAL).await;
+    
+    // Send messages from both devices
+    let message1_text = "Message from device 1";
+    let message2_text = "Message from device 2";
+    
+    info!("Sending messages from both devices");
+    let message1_id = device1.rest_send_message(team_id, message1_text).await?;
+    let message2_id = device2.rest_send_message(team_id, message2_text).await?;
+    
+    // Wait for messages to sync
+    sleep(LONG_SLEEP_INTERVAL).await;
+    
+    // Query messages from both devices with retry for storage errors
+    let messages_from_device1 = device1.rest_query_messages_with_retry(team_id).await?;
+    let messages_from_device2 = device2.rest_query_messages_with_retry(team_id).await?;
+    
+    // Both devices should see both messages
+    assert_eq!(messages_from_device1.len(), 2, "Device1 should see 2 messages");
+    assert_eq!(messages_from_device2.len(), 2, "Device2 should see 2 messages");
+    
+    // Verify messages are synced correctly
+    let mut device1_message_ids: Vec<String> = messages_from_device1.iter().map(|m| m.id.clone()).collect();
+    let mut device2_message_ids: Vec<String> = messages_from_device2.iter().map(|m| m.id.clone()).collect();
+    
+    device1_message_ids.sort();
+    device2_message_ids.sort();
+    
+    assert_eq!(device1_message_ids, device2_message_ids, "Both devices should see the same message IDs");
+    
+    // Verify message contents
+    let messages = &messages_from_device1;
+    let message_texts: std::collections::HashSet<String> = messages.iter().map(|m| m.text.clone()).collect();
+    assert!(message_texts.contains(message1_text), "Should contain message from device1");
+    assert!(message_texts.contains(message2_text), "Should contain message from device2");
+    
+    // Verify authors
+    let author_ids: std::collections::HashSet<String> = messages.iter().map(|m| m.author_id.clone()).collect();
+    assert!(author_ids.contains(&hex::encode(device1.id.into_id().as_bytes())), "Should contain device1 as author");
+    assert!(author_ids.contains(&hex::encode(device2.id.into_id().as_bytes())), "Should contain device2 as author");
+    
+    info!("Multi-device messaging test completed successfully");
+    Ok(())
+}
+
+#[test_log::test(tokio::test)]
+async fn test_rest_messaging_team_context() -> Result<()> {
+    info!("Starting team context messaging test");
+    
+    // Create a full team context with multiple roles
+    let mut team = RestTeamCtx::new("messaging-team").await?;
+    
+    // Create team via owner
+    let cfg = aranya_client::TeamConfig::builder().build()?;
+    let team_id = team.owner.client.create_team(cfg).await?;
+    
+    // Set up team structure via REST API
+    team.add_all_sync_peers(team_id).await?;
+    team.add_all_device_roles_via_rest(team_id).await?;
+    
+    // Wait for team structure to sync
+    sleep(LONG_SLEEP_INTERVAL).await;
+    
+    // Send messages from different roles
+    info!("Sending messages from different team roles");
+    let owner_msg = team.owner.rest_send_message(team_id, "Message from Owner").await?;
+    let admin_msg = team.admin.rest_send_message(team_id, "Message from Admin").await?;
+    let operator_msg = team.operator.rest_send_message(team_id, "Message from Operator").await?;
+    let member_msg = team.membera.rest_send_message(team_id, "Message from Member").await?;
+    
+    // Wait for all messages to sync across the team
+    sleep(LONG_SLEEP_INTERVAL).await;
+    
+    // Query messages from each device
+    info!("Verifying all devices can see all messages");
+    for (name, device) in [
+        ("owner", &team.owner),
+        ("admin", &team.admin), 
+        ("operator", &team.operator),
+        ("membera", &team.membera),
+        ("memberb", &team.memberb)
+    ] {
+        let messages = device.rest_query_messages_with_retry(team_id).await?;
+        info!("{} sees {} messages", name, messages.len());
+        
+        // Each device should see all 4 messages
+        assert_eq!(messages.len(), 4, "{} should see 4 messages", name);
+        
+        // Verify all expected message texts are present
+        let message_texts: std::collections::HashSet<String> = messages.iter().map(|m| m.text.clone()).collect();
+        assert!(message_texts.contains("Message from Owner"), "{} should see owner message", name);
+        assert!(message_texts.contains("Message from Admin"), "{} should see admin message", name);
+        assert!(message_texts.contains("Message from Operator"), "{} should see operator message", name);
+        assert!(message_texts.contains("Message from Member"), "{} should see member message", name);
+    }
+    
+    info!("Team context messaging test completed successfully");
     Ok(())
 }

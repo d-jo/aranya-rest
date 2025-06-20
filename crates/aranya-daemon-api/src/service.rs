@@ -99,6 +99,11 @@ custom_id! {
     pub struct AqcUniChannelId;
 }
 
+custom_id! {
+    /// A message ID.
+    pub struct MessageId;
+}
+
 /// A device's public key bundle.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub struct KeyBundle {
@@ -568,6 +573,15 @@ pub struct Label {
     pub name: String,
 }
 
+/// A team message.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Message {
+    pub id: MessageId,
+    pub author_id: DeviceId,
+    pub text: String,
+    pub timestamp: u64,
+}
+
 #[tarpc::service]
 pub trait DaemonApi {
     /// Returns the daemon's version.
@@ -675,6 +689,11 @@ pub trait DaemonApi {
     async fn query_labels(team: TeamId) -> Result<Vec<Label>>;
     /// Query whether a label exists.
     async fn query_label_exists(team: TeamId, label: LabelId) -> Result<bool>;
+    
+    /// Send a message to the team.
+    async fn send_message(team: TeamId, text: String) -> Result<MessageId>;
+    /// Query messages from the team.
+    async fn query_messages(team: TeamId, limit: u32) -> Result<Vec<Message>>;
 }
 
 #[cfg(test)]
