@@ -321,7 +321,7 @@ impl DaemonManager {
             "addr": format!("127.0.0.1:{}", to_node.daemon_port),
             "team_id": team_id,
             "config": {
-                "interval_secs": 30,
+                "interval_secs": 1,
                 "sync_now": true
             }
         });
@@ -381,4 +381,98 @@ impl DaemonManager {
         info!("Successfully removed sync peer from {} to {}", from_node_id, to_node_id);
         Ok(())
     }
+
+    #[instrument(skip(self))]
+    pub async fn send_message(&self, node_id: Uuid, team_id: &str, message: &str) -> Result<String> {
+        info!("Sending message from node {} to team {}", node_id, team_id);
+        
+        let node = {
+            let state = self.state.read().await;
+            state.nodes.get(&node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Node {} not found", node_id))?
+        };
+
+        // Make REST API call to send message
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/api/v1/teams/{}/messages", node.rest_port, team_id);
+        
+        let send_request = serde_json::json!({
+            "text": message
+        });
+
+        let response = client
+            .post(&url)
+            .json(&send_request)
+            .send()
+            .await
+            .context("Failed to send message request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to send message: {}", error_text);
+        }
+
+        let response_json: serde_json::Value = response.json().await
+            .context("Failed to parse send message response")?;
+        
+        let message_id = response_json["message_id"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("No message_id in response"))?
+            .to_string();
+
+        info!("Successfully sent message from node {} with ID {}", node_id, message_id);
+        Ok(message_id)
+    }
+
+    #[instrument(skip(self))]
+    pub async fn query_messages(&self, node_id: Uuid, team_id: &str) -> Result<Vec<MessageInfo>> {
+        let node = {
+            let state = self.state.read().await;
+            state.nodes.get(&node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Node {} not found", node_id))?
+        };
+
+        // Make REST API call to query messages
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/api/v1/teams/{}/messages", node.rest_port, team_id);
+
+        let response = client
+            .get(&url)
+            .send()
+            .await
+            .context("Failed to query messages")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to query messages: {}", error_text);
+        }
+
+        let messages: Vec<serde_json::Value> = response.json().await
+            .context("Failed to parse query messages response")?;
+
+        let mut result = Vec::new();
+        for msg in messages {
+            let id = msg["id"].as_str().unwrap_or("").to_string();
+            let author_id = msg["author_id"].as_str().unwrap_or("").to_string();
+            let text = msg["text"].as_str().unwrap_or("").to_string();
+            let timestamp = msg["timestamp"].as_u64().unwrap_or(0);
+            
+            result.push(MessageInfo {
+                id,
+                author_id,
+                text,
+                timestamp,
+            });
+        }
+
+        Ok(result)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MessageInfo {
+    pub id: String,
+    pub author_id: String,
+    pub text: String,
+    pub timestamp: u64,
 }

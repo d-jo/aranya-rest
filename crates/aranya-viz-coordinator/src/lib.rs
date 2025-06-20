@@ -40,7 +40,7 @@ pub struct Position {
 }
 
 /// Node status
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum NodeStatus {
     Stopped,
     Starting,
@@ -82,6 +82,10 @@ pub enum WsMessage {
     LeaveTeam { node_id: Uuid, team_id: String },
     AssignRole { node_id: Uuid, team_id: String, target_node_id: Uuid, role: String },
     
+    // Message operations
+    SendMessage { node_id: Uuid, team_id: String, message: String },
+    PollMessages { node_id: Uuid, team_id: String },
+    
     // Server -> Client
     NodeCreated { node: Node },
     NodeDeleted { node_id: Uuid },
@@ -97,6 +101,10 @@ pub enum WsMessage {
     TeamJoined { node_id: Uuid, team: TeamInfo },
     TeamLeft { node_id: Uuid, team_id: String },
     RoleAssigned { node_id: Uuid, team_id: String, role: String },
+    
+    // Message events
+    MessageSent { node_id: Uuid, message_id: String, author_id: Uuid, team_id: String, text: String, timestamp: u64 },
+    MessageReceived { node_id: Uuid, message_id: String, author_id: Uuid, team_id: String, text: String, timestamp: u64 },
     
     // Bidirectional
     GetState,

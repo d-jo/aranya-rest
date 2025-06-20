@@ -332,6 +332,109 @@ async fn handle_message(
             }
         }
 
+        WsMessage::SendMessage { node_id, team_id, message } => {
+            match daemon_manager.send_message(node_id, &team_id, &message).await {
+                Ok(message_id) => {
+                    // Broadcast that a message was sent
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_secs();
+                    
+                    let _ = tx.send(WsMessage::MessageSent {
+                        node_id,
+                        message_id: message_id.clone(),
+                        author_id: node_id,
+                        team_id: team_id.clone(),
+                        text: message,
+                        timestamp: now,
+                    });
+                    
+                    // Start polling for message reception on other nodes
+                    tokio::spawn({
+                        let daemon_manager = daemon_manager.clone();
+                        let state = state.clone();
+                        let tx = tx.clone();
+                        let team_id = team_id.clone();
+                        let message_id = message_id.clone();
+                        async move {
+                            // Wait a bit for message to propagate
+                            tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+                            
+                            // Find all nodes in the team
+                            let team_nodes = {
+                                let state_guard = state.read().await;
+                                state_guard.nodes.values()
+                                    .filter(|node| node.teams.iter().any(|t| t.id == team_id))
+                                    .filter(|node| node.status == crate::NodeStatus::Running)
+                                    .filter(|node| node.id != node_id) // Exclude sender
+                                    .map(|node| node.id)
+                                    .collect::<Vec<_>>()
+                            };
+                            
+                            // Check each node for the message
+                            for target_node_id in team_nodes {
+                                match daemon_manager.query_messages(target_node_id, &team_id).await {
+                                    Ok(messages) => {
+                                        // Look for the message we just sent
+                                        for msg in messages {
+                                            if msg.id == message_id {
+                                                let _ = tx.send(WsMessage::MessageReceived {
+                                                    node_id: target_node_id,
+                                                    message_id: msg.id,
+                                                    author_id: node_id,
+                                                    team_id: team_id.clone(),
+                                                    text: msg.text,
+                                                    timestamp: msg.timestamp,
+                                                });
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        error!("Failed to query messages for node {}: {}", target_node_id, e);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+                Err(e) => {
+                    error!("Failed to send message from node {}: {}", node_id, e);
+                    let _ = tx.send(WsMessage::Error {
+                        message: format!("Failed to send message: {}", e)
+                    });
+                }
+            }
+        }
+
+        WsMessage::PollMessages { node_id, team_id } => {
+            // Query messages for the specific node and team
+            match daemon_manager.query_messages(node_id, &team_id).await {
+                Ok(messages) => {
+                    // Send each message as a MessageReceived event
+                    for msg in messages {
+                        // For now, just use the polling node_id as author
+                        // In a real implementation, we'd need to map device IDs to node IDs
+                        let author_node_id = node_id;
+                        
+                        let _ = tx.send(WsMessage::MessageReceived {
+                            node_id,
+                            message_id: msg.id,
+                            author_id: author_node_id,
+                            team_id: team_id.clone(),
+                            text: msg.text,
+                            timestamp: msg.timestamp,
+                        });
+                    }
+                }
+                Err(e) => {
+                    // Log but don't send error to avoid spam - polling failures are expected
+                    tracing::debug!("Failed to poll messages for node {}: {}", node_id, e);
+                }
+            }
+        }
+
         WsMessage::GetState => {
             let (nodes, connections, teams) = {
                 let state_guard = state.read().await;

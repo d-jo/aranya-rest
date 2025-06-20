@@ -108,6 +108,75 @@ async fn serve_basic_html() -> Html<&'static str> {
         .context-menu-item:hover {
             background: #f5f5f5;
         }
+        .message-bubble {
+            position: absolute;
+            background: #2196F3;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 18px;
+            font-size: 13px;
+            font-weight: 500;
+            max-width: 250px;
+            word-wrap: break-word;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(-10px) scale(0.8);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1001;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+        .message-bubble.show {
+            opacity: 1;
+            transform: translateY(-50px) scale(1);
+        }
+        .message-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-top: 8px solid #2196F3;
+        }
+        .message-panel {
+            position: absolute;
+            left: 20px;
+            top: 20px;
+            width: 300px;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            padding: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .message-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+            min-height: 60px;
+        }
+        .message-send-btn {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .message-send-btn:hover {
+            background: #45a049;
+        }
+        .message-send-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
         .tool-selector {
             margin: 10px 0;
             padding: 10px;
@@ -203,7 +272,36 @@ async fn serve_basic_html() -> Html<&'static str> {
         <div class="context-menu-item" onclick="createTeamForNode()">Create Team</div>
         <div class="context-menu-item" onclick="joinTeamDialog()">Join Team</div>
         <div class="context-menu-item" onclick="removeSyncPeers()">Remove Sync Peers</div>
+        <div class="context-menu-item" onclick="sendMessageToNode()">Send Message</div>
         <div class="context-menu-item" onclick="viewNodeInfo()">View Info</div>
+    </div>
+    
+    <div class="message-panel">
+        <h3>Send Message</h3>
+        <div style="margin-bottom: 10px;">
+            <label for="messageSenderSelector">Select Sender Node:</label>
+            <select id="messageSenderSelector" style="width: 100%; padding: 5px; margin-top: 5px;">
+                <option value="">-- Select Sender Node --</option>
+            </select>
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label for="messageTeamSelector">Select Team:</label>
+            <select id="messageTeamSelector" style="width: 100%; padding: 5px; margin-top: 5px;">
+                <option value="">-- Select Team to Send Message --</option>
+            </select>
+        </div>
+        <div style="margin-bottom: 10px;">
+            <label for="messageInput">Message:</label>
+            <textarea id="messageInput" class="message-input" placeholder="Type your message here..."></textarea>
+        </div>
+        <button class="message-send-btn" onclick="sendBroadcastMessage()" id="sendMessageBtn" disabled>Send Message</button>
+        
+        <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
+            <h4>Recent Messages</h4>
+            <div id="recentMessages" style="max-height: 200px; overflow-y: auto; font-size: 12px;">
+                <p style="color: #999; font-style: italic;">No messages yet</p>
+            </div>
+        </div>
     </div>
     
     <div class="teams-panel">
@@ -276,6 +374,10 @@ async fn serve_basic_html() -> Html<&'static str> {
         let connectStart = null;
         let mousePos = { x: 0, y: 0 };
         let selectedTeamId = null;
+        let recentMessages = [];
+        let messageBubbles = new Map();
+        let messagePollingInterval = null;
+        let lastKnownMessages = new Map(); // nodeId-teamId -> Set of messageIds
 
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -284,6 +386,8 @@ async fn serve_basic_html() -> Html<&'static str> {
             ws.onopen = function() {
                 document.getElementById('status').textContent = 'Connected. Click to place nodes!';
                 ws.send(JSON.stringify({ type: 'GetState' }));
+                // Start message polling after connection
+                setTimeout(startMessagePolling, 2000);
             };
             
             ws.onmessage = function(event) {
@@ -293,6 +397,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             
             ws.onclose = function() {
                 document.getElementById('status').textContent = 'Disconnected. Attempting to reconnect...';
+                stopMessagePolling();
                 setTimeout(connectWebSocket, 1000);
             };
             
@@ -387,6 +492,58 @@ async fn serve_basic_html() -> Html<&'static str> {
                         }
                         updateTeamsUI();
                         draw();
+                    }
+                    break;
+                case 'MessageSent':
+                    // Add to recent messages
+                    const sentMessage = {
+                        id: message.message_id,
+                        author_id: message.author_id,
+                        author_name: getNodeName(message.author_id),
+                        text: message.text,
+                        timestamp: message.timestamp,
+                        team_id: message.team_id
+                    };
+                    recentMessages.push(sentMessage);
+                    updateRecentMessages();
+                    console.log(`📤 Message sent by ${sentMessage.author_name}: "${sentMessage.text}"`);
+                    break;
+                case 'MessageReceived':
+                    // Track messages per node-team to avoid duplicates
+                    const nodeTeamKey = `${message.node_id}-${message.team_id}`;
+                    if (!lastKnownMessages.has(nodeTeamKey)) {
+                        lastKnownMessages.set(nodeTeamKey, new Set());
+                    }
+                    const knownMessageIds = lastKnownMessages.get(nodeTeamKey);
+                    
+                    // Only process if this is a new message for this node-team
+                    if (!knownMessageIds.has(message.message_id)) {
+                        knownMessageIds.add(message.message_id);
+                        
+                        // Get author name from node ID
+                        const authorName = getNodeName(message.author_id);
+                        
+                        const receivedMessage = {
+                            id: message.message_id,
+                            author_id: message.author_id,
+                            author_name: authorName,
+                            text: message.text,
+                            timestamp: message.timestamp,
+                            team_id: message.team_id
+                        };
+                        
+                        // Add to recent messages if not already there globally
+                        if (!recentMessages.some(m => m.id === receivedMessage.id)) {
+                            recentMessages.push(receivedMessage);
+                            updateRecentMessages();
+                        }
+                        
+                        // Show bubble on receiving node 
+                        const receivingNode = nodes.get(message.node_id);
+                        if (receivingNode) {
+                            console.log(`📨 Node ${receivingNode.name} received message: "${receivedMessage.text}" from ${receivedMessage.author_name}`);
+                            showMessageBubble(message.node_id, receivedMessage.text, receivedMessage.author_name);
+                        }
                     }
                     break;
             }
@@ -740,6 +897,29 @@ async fn serve_basic_html() -> Html<&'static str> {
                 selector.value = currentValue;
                 selectedTeamId = currentValue;
             }
+            
+            // Update message team selector
+            const messageSelector = document.getElementById('messageTeamSelector');
+            const currentMessageValue = messageSelector.value;
+            messageSelector.innerHTML = '<option value="">-- Select Team to Send Message --</option>';
+            
+            teams.forEach(team => {
+                const option = document.createElement('option');
+                option.value = team.id;
+                option.textContent = team.name;
+                messageSelector.appendChild(option);
+            });
+            
+            // Restore selection if still valid
+            if (currentMessageValue && teams.has(currentMessageValue)) {
+                messageSelector.value = currentMessageValue;
+            }
+            
+            // Update message sender selector
+            updateMessageSenderSelector();
+            
+            // Update send button state
+            updateSendButtonState();
             
             // Update available teams selector for joining
             const availableTeamsSelector = document.getElementById('availableTeamsSelector');
@@ -1138,6 +1318,230 @@ async fn serve_basic_html() -> Html<&'static str> {
             // Clear pending setup
             delete window.pendingQuickSetup;
         }
+
+        // Messaging functions
+        function updateSendButtonState() {
+            const messageSenderSelector = document.getElementById('messageSenderSelector');
+            const messageTeamSelector = document.getElementById('messageTeamSelector');
+            const messageInput = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendMessageBtn');
+            
+            const hasSender = messageSenderSelector.value !== '';
+            const hasTeam = messageTeamSelector.value !== '';
+            const hasMessage = messageInput.value.trim() !== '';
+            
+            sendBtn.disabled = !hasSender || !hasTeam || !hasMessage;
+        }
+
+        function updateMessageSenderSelector() {
+            const senderSelector = document.getElementById('messageSenderSelector');
+            const teamSelector = document.getElementById('messageTeamSelector');
+            const currentSenderValue = senderSelector.value;
+            
+            senderSelector.innerHTML = '<option value="">-- Select Sender Node --</option>';
+            
+            const selectedTeamId = teamSelector.value;
+            if (selectedTeamId) {
+                // Show only nodes that are in the selected team and running
+                nodes.forEach(node => {
+                    if (node.status === 'Running' && 
+                        node.teams && 
+                        node.teams.some(t => t.id === selectedTeamId)) {
+                        const option = document.createElement('option');
+                        option.value = node.id;
+                        option.textContent = `${node.name} (${node.teams.find(t => t.id === selectedTeamId)?.role || 'Member'})`;
+                        senderSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            // Restore selection if still valid
+            if (currentSenderValue && senderSelector.querySelector(`option[value="${currentSenderValue}"]`)) {
+                senderSelector.value = currentSenderValue;
+            }
+            
+            updateSendButtonState();
+        }
+
+        function sendMessageToNode() {
+            if (!contextMenuNode) return;
+            
+            const node = nodes.get(contextMenuNode);
+            if (!node || !node.teams || node.teams.length === 0) {
+                alert('This node is not part of any team. Join a team first to send messages.');
+                document.getElementById('contextMenu').style.display = 'none';
+                return;
+            }
+            
+            // Show available teams for this node
+            let teamOptions = 'Available teams for this node:\n';
+            node.teams.forEach(team => {
+                teamOptions += `- ${team.name} (Role: ${team.role})\n`;
+            });
+            
+            const message = prompt(teamOptions + '\nEnter your message:');
+            if (message && message.trim()) {
+                // Use the first team for simplicity
+                const teamId = node.teams[0].id;
+                sendMessageViaNode(contextMenuNode, teamId, message.trim());
+            }
+            
+            document.getElementById('contextMenu').style.display = 'none';
+        }
+
+        function sendBroadcastMessage() {
+            const messageSenderSelector = document.getElementById('messageSenderSelector');
+            const messageTeamSelector = document.getElementById('messageTeamSelector');
+            const messageInput = document.getElementById('messageInput');
+            
+            const senderNodeId = messageSenderSelector.value;
+            const teamId = messageTeamSelector.value;
+            const message = messageInput.value.trim();
+            
+            if (!senderNodeId || !teamId || !message) {
+                return;
+            }
+            
+            sendMessageViaNode(senderNodeId, teamId, message);
+            messageInput.value = '';
+            updateSendButtonState();
+        }
+
+        function sendMessageViaNode(nodeId, teamId, message) {
+            ws.send(JSON.stringify({
+                type: 'SendMessage',
+                node_id: nodeId,
+                team_id: teamId,
+                message: message
+            }));
+        }
+
+        function showMessageBubble(nodeId, message, authorName) {
+            const node = nodes.get(nodeId);
+            if (!node) return;
+            
+            // Create bubble element
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.innerHTML = `<strong>${authorName}:</strong> ${message}`;
+            
+            // Position bubble above node
+            const rect = canvas.getBoundingClientRect();
+            bubble.style.left = (rect.left + node.position.x - 100) + 'px';
+            bubble.style.top = (rect.top + node.position.y - 60) + 'px';
+            
+            document.body.appendChild(bubble);
+            
+            // Animate in
+            setTimeout(() => {
+                bubble.classList.add('show');
+            }, 100);
+            
+            // Remove after 6 seconds (longer duration for easier visibility)
+            setTimeout(() => {
+                bubble.classList.remove('show');
+                setTimeout(() => {
+                    document.body.removeChild(bubble);
+                }, 400);
+            }, 6000);
+        }
+
+        function updateRecentMessages() {
+            const container = document.getElementById('recentMessages');
+            
+            if (recentMessages.length === 0) {
+                container.innerHTML = '<p style="color: #999; font-style: italic;">No messages yet</p>';
+                return;
+            }
+            
+            let html = '';
+            recentMessages.slice(-10).forEach(msg => {
+                const time = new Date(msg.timestamp * 1000).toLocaleTimeString();
+                html += `
+                    <div style="margin-bottom: 8px; padding: 6px; background: #f9f9f9; border-radius: 4px;">
+                        <div style="font-weight: bold; color: #333;">${msg.author_name} (${time})</div>
+                        <div style="color: #666; margin-top: 2px;">${msg.text}</div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Message polling functions
+        function startMessagePolling() {
+            if (messagePollingInterval) {
+                clearInterval(messagePollingInterval);
+            }
+            
+            // Poll every 250ms for real-time message display (much faster than 1s daemon sync)
+            messagePollingInterval = setInterval(pollForNewMessages, 250);
+            
+            // Also poll immediately
+            setTimeout(pollForNewMessages, 1000);
+        }
+
+        function stopMessagePolling() {
+            if (messagePollingInterval) {
+                clearInterval(messagePollingInterval);
+                messagePollingInterval = null;
+            }
+        }
+
+        function pollForNewMessages() {
+            // Get all teams and their member nodes
+            const teamNodeMap = new Map();
+            let totalPolls = 0;
+            
+            teams.forEach(team => {
+                const teamNodes = [];
+                nodes.forEach(node => {
+                    if (node.status === 'Running' && 
+                        node.teams && 
+                        node.teams.some(t => t.id === team.id)) {
+                        teamNodes.push(node.id);
+                    }
+                });
+                if (teamNodes.length > 0) {
+                    teamNodeMap.set(team.id, teamNodes);
+                }
+            });
+
+            // Poll messages for each node in each team
+            teamNodeMap.forEach((nodeIds, teamId) => {
+                nodeIds.forEach(nodeId => {
+                    pollMessagesForNode(nodeId, teamId);
+                    totalPolls++;
+                });
+            });
+            
+            // Debug: Log polling activity periodically
+            if (totalPolls > 0 && Math.random() < 0.05) { // Log ~5% of the time to avoid spam
+                console.log(`Polling ${totalPolls} node-team combinations for new messages`);
+            }
+        }
+
+        function pollMessagesForNode(nodeId, teamId) {
+            ws.send(JSON.stringify({
+                type: 'PollMessages',
+                node_id: nodeId,
+                team_id: teamId
+            }));
+        }
+
+        // Event listeners for message panel
+        document.getElementById('messageSenderSelector').addEventListener('change', updateSendButtonState);
+        document.getElementById('messageTeamSelector').addEventListener('change', function() {
+            updateMessageSenderSelector();
+            updateSendButtonState();
+        });
+        document.getElementById('messageInput').addEventListener('input', updateSendButtonState);
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                sendBroadcastMessage();
+            }
+        });
 
         // Initialize
         connectWebSocket();
