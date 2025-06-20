@@ -252,8 +252,7 @@ impl RestDeviceCtx {
     }
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn test_rest_server_version_single_daemon() -> Result<()> {
     info!("Starting test_rest_server_version_single_daemon");
     
@@ -271,8 +270,7 @@ async fn test_rest_server_version_single_daemon() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn test_rest_server_version_multi_daemon() -> Result<()> {
     info!("Starting test_rest_server_version_multi_daemon");
     
@@ -426,8 +424,7 @@ impl RestTeamCtx {
     }
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn test_rest_team_workflow_comprehensive() -> Result<()> {
     info!("Starting comprehensive REST team workflow test");
 
@@ -548,8 +545,7 @@ impl RestDeviceCtx {
     }
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn test_device_info_endpoints() -> Result<()> {
     info!("Starting device info endpoints test");
     
@@ -580,8 +576,7 @@ async fn test_device_info_endpoints() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn test_device_info_multi_daemon() -> Result<()> {
     info!("Starting multi-daemon device info test");
     
@@ -701,8 +696,7 @@ impl RestDeviceCtx {
     }
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn test_sync_peer_management() -> Result<()> {
     info!("Starting sync peer management test");
     
@@ -804,8 +798,7 @@ impl RestDeviceCtx {
     }
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn test_team_management_endpoints() -> Result<()> {
     info!("Starting team management endpoints test");
     
@@ -836,8 +829,7 @@ async fn test_team_management_endpoints() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn test_team_lifecycle_multi_daemon() -> Result<()> {
     info!("Starting multi-daemon team lifecycle test");
     
@@ -972,8 +964,7 @@ impl RestDeviceCtx {
     }
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn test_device_management_within_teams() -> Result<()> {
     info!("Starting device management within teams test");
     
@@ -1077,8 +1068,7 @@ impl RestDeviceCtx {
     }
 }
 
-#[tokio::test]
-#[test_log::test]
+#[test_log::test(tokio::test)]
 async fn test_role_management_comprehensive() -> Result<()> {
     info!("Starting comprehensive role management test");
     
