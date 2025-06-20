@@ -75,8 +75,22 @@ async fn serve_basic_html() -> Html<&'static str> {
         body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
         .container { max-width: 1200px; margin: 0 auto; }
         .header { text-align: center; margin-bottom: 20px; }
-        .canvas-container { border: 2px solid #ccc; position: relative; margin: 20px 0; }
-        #canvas { display: block; cursor: crosshair; }
+        .canvas-container { 
+            border: 2px solid #ccc; 
+            position: relative; 
+            margin: 20px 0; 
+            overflow: hidden;
+            background: #f9f9f9;
+            background-image: 
+                linear-gradient(rgba(0,0,0,.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,.1) 1px, transparent 1px);
+            background-size: 50px 50px;
+        }
+        #canvas { 
+            display: block; 
+            cursor: crosshair; 
+            background: transparent;
+        }
         .controls { margin: 20px 0; }
         .controls button { margin: 5px; padding: 10px 15px; }
         .status { background: #f5f5f5; padding: 10px; border-radius: 5px; }
@@ -242,13 +256,15 @@ async fn serve_basic_html() -> Html<&'static str> {
     <div class="container">
         <div class="header">
             <h1>Aranya Visualization</h1>
-            <p>Click to place nodes. Drag to move them. Right-click for options.</p>
+            <p>Click to place nodes. Drag to move them. Pan by dragging empty space. Zoom with mouse wheel. Right-click for options.</p>
         </div>
         
         <div class="controls">
             <button onclick="clearAll()">Clear All</button>
             <button onclick="toggleConnections()">Toggle Connections</button>
-            <input type="text" id="nodeNameInput" placeholder="Node name..." value="">
+            <button onclick="resetView()">Reset View</button>
+            <span style="margin-left: 15px; color: #666;">Zoom: <span id="zoomLevel">100%</span></span>
+            <input type="text" id="nodeNameInput" placeholder="Node name..." value="" style="margin-left: 15px;">
         </div>
         
         <div class="tool-selector">
@@ -387,6 +403,16 @@ async fn serve_basic_html() -> Html<&'static str> {
         let messageBubbles = new Map();
         let messagePollingInterval = null;
         let lastKnownMessages = new Map(); // nodeId-teamId -> Set of messageIds
+        
+        // Viewport/camera variables for panning and zooming
+        let viewportX = 0;
+        let viewportY = 0;
+        let viewportScale = 1;
+        let isPanning = false;
+        let lastPanX = 0;
+        let lastPanY = 0;
+        const CANVAS_WIDTH = 2000;  // Virtual canvas size
+        const CANVAS_HEIGHT = 1500;
 
         function connectWebSocket() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -561,6 +587,18 @@ async fn serve_basic_html() -> Html<&'static str> {
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
+            // Save context and apply viewport transformations
+            ctx.save();
+            ctx.translate(viewportX, viewportY);
+            ctx.scale(viewportScale, viewportScale);
+            
+            // Draw virtual canvas boundaries
+            ctx.strokeStyle = '#ccc';
+            ctx.lineWidth = 2 / viewportScale;
+            ctx.setLineDash([10 / viewportScale, 5 / viewportScale]);
+            ctx.strokeRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.setLineDash([]);
+            
             // Draw connections
             if (showConnections) {
                 connections.forEach(conn => {
@@ -595,6 +633,9 @@ async fn serve_basic_html() -> Html<&'static str> {
             nodes.forEach(node => {
                 drawNode(node);
             });
+            
+            // Restore context
+            ctx.restore();
         }
 
         function drawNode(node) {
@@ -681,10 +722,26 @@ async fn serve_basic_html() -> Html<&'static str> {
             ctx.stroke();
         }
 
+        // Coordinate transformation functions
+        function screenToWorld(screenX, screenY) {
+            return {
+                x: (screenX - viewportX) / viewportScale,
+                y: (screenY - viewportY) / viewportScale
+            };
+        }
+        
+        function worldToScreen(worldX, worldY) {
+            return {
+                x: worldX * viewportScale + viewportX,
+                y: worldY * viewportScale + viewportY
+            };
+        }
+        
         function getNodeAt(x, y) {
+            const worldPos = screenToWorld(x, y);
             for (let [id, node] of nodes) {
-                const dx = x - node.position.x;
-                const dy = y - node.position.y;
+                const dx = worldPos.x - node.position.x;
+                const dy = worldPos.y - node.position.y;
                 if (dx * dx + dy * dy <= 30 * 30) {
                     return id;
                 }
@@ -701,6 +758,11 @@ async fn serve_basic_html() -> Html<&'static str> {
             
             if (currentTool === 'place') {
                 if (!nodeId) {
+                    const worldPos = screenToWorld(x, y);
+                    // Clamp to virtual canvas bounds
+                    const clampedX = Math.max(50, Math.min(CANVAS_WIDTH - 50, worldPos.x));
+                    const clampedY = Math.max(50, Math.min(CANVAS_HEIGHT - 50, worldPos.y));
+                    
                     const nameInput = document.getElementById('nodeNameInput');
                     const name = nameInput.value.trim() || `Node${nodes.size + 1}`;
                     nameInput.value = '';
@@ -708,7 +770,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                     ws.send(JSON.stringify({
                         type: 'CreateNode',
                         name: name,
-                        position: { x: x, y: y }
+                        position: { x: clampedX, y: clampedY }
                     }));
                 }
             } else if (currentTool === 'connect') {
@@ -748,6 +810,12 @@ async fn serve_basic_html() -> Html<&'static str> {
             
             if (currentTool === 'select') {
                 dragNode = getNodeAt(x, y);
+                if (!dragNode && e.button === 0) { // Left click and no node = start panning
+                    isPanning = true;
+                    lastPanX = e.clientX;
+                    lastPanY = e.clientY;
+                    canvas.style.cursor = 'grabbing';
+                }
             }
         });
 
@@ -756,19 +824,38 @@ async fn serve_basic_html() -> Html<&'static str> {
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
             
-            mousePos = { x, y };
+            mousePos = screenToWorld(x, y); // Convert to world coordinates for consistency
             
-            if (dragNode && currentTool === 'select') {
+            if (isPanning && currentTool === 'select') {
+                // Handle panning
+                const deltaX = e.clientX - lastPanX;
+                const deltaY = e.clientY - lastPanY;
+                viewportX += deltaX;
+                viewportY += deltaY;
+                lastPanX = e.clientX;
+                lastPanY = e.clientY;
+                draw();
+            } else if (dragNode && currentTool === 'select') {
+                // Handle node dragging
+                const worldPos = screenToWorld(x, y);
+                // Clamp to virtual canvas bounds
+                const clampedX = Math.max(30, Math.min(CANVAS_WIDTH - 30, worldPos.x));
+                const clampedY = Math.max(30, Math.min(CANVAS_HEIGHT - 30, worldPos.y));
+                
                 ws.send(JSON.stringify({
                     type: 'MoveNode',
                     node_id: dragNode,
-                    position: { x: x, y: y }
+                    position: { x: clampedX, y: clampedY }
                 }));
             }
             
             // Update canvas cursor
             if (currentTool === 'select') {
-                canvas.style.cursor = getNodeAt(x, y) ? 'move' : 'default';
+                if (isPanning) {
+                    canvas.style.cursor = 'grabbing';
+                } else {
+                    canvas.style.cursor = getNodeAt(x, y) ? 'move' : 'grab';
+                }
             } else if (currentTool === 'place') {
                 canvas.style.cursor = 'crosshair';
             } else if (currentTool === 'connect') {
@@ -783,6 +870,10 @@ async fn serve_basic_html() -> Html<&'static str> {
 
         canvas.addEventListener('mouseup', function() {
             dragNode = null;
+            isPanning = false;
+            if (currentTool === 'select') {
+                canvas.style.cursor = 'grab';
+            }
         });
 
         // Prevent default right-click menu
@@ -800,6 +891,34 @@ async fn serve_basic_html() -> Html<&'static str> {
                 menu.style.left = e.clientX + 'px';
                 menu.style.top = e.clientY + 'px';
             }
+        });
+
+        // Mouse wheel for zooming
+        canvas.addEventListener('wheel', function(e) {
+            e.preventDefault();
+            
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            // Zoom factor
+            const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
+            const newScale = viewportScale * zoomFactor;
+            
+            // Limit zoom range
+            if (newScale < 0.1 || newScale > 3.0) return;
+            
+            // Zoom towards mouse position
+            const worldPosBeforeZoom = screenToWorld(mouseX, mouseY);
+            viewportScale = newScale;
+            const worldPosAfterZoom = screenToWorld(mouseX, mouseY);
+            
+            // Adjust viewport to keep mouse position stable
+            viewportX += (worldPosAfterZoom.x - worldPosBeforeZoom.x) * viewportScale;
+            viewportY += (worldPosAfterZoom.y - worldPosBeforeZoom.y) * viewportScale;
+            
+            updateZoomDisplay();
+            draw();
         });
 
         // Hide context menu on click elsewhere
@@ -820,6 +939,18 @@ async fn serve_basic_html() -> Html<&'static str> {
         function toggleConnections() {
             showConnections = !showConnections;
             draw();
+        }
+        
+        function resetView() {
+            viewportX = 0;
+            viewportY = 0;
+            viewportScale = 1;
+            updateZoomDisplay();
+            draw();
+        }
+        
+        function updateZoomDisplay() {
+            document.getElementById('zoomLevel').textContent = Math.round(viewportScale * 100) + '%';
         }
 
         function deleteSelectedNode() {
@@ -1490,10 +1621,11 @@ async fn serve_basic_html() -> Html<&'static str> {
             bubble.className = 'message-bubble';
             bubble.innerHTML = `<strong>${authorName}:</strong> ${message}`;
             
-            // Position bubble above node
+            // Position bubble above node (convert world coordinates to screen)
             const rect = canvas.getBoundingClientRect();
-            bubble.style.left = (rect.left + node.position.x - 100) + 'px';
-            bubble.style.top = (rect.top + node.position.y - 60) + 'px';
+            const screenPos = worldToScreen(node.position.x, node.position.y);
+            bubble.style.left = (rect.left + screenPos.x - 100) + 'px';
+            bubble.style.top = (rect.top + screenPos.y - 60) + 'px';
             
             document.body.appendChild(bubble);
             
