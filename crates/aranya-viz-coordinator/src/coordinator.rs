@@ -242,6 +242,21 @@ async fn serve_basic_html() -> Html<&'static str> {
         </div>
         
         <div class="team-section">
+            <h4>Team Actions</h4>
+            <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 15px;">
+                <button onclick="addAllNodesToSelectedTeam()" style="padding: 8px; background: #4CAF50; color: white; border: none; border-radius: 4px;">
+                    Add All Nodes to Selected Team
+                </button>
+                <button onclick="autoSyncTeamMembers()" style="padding: 8px; background: #2196F3; color: white; border: none; border-radius: 4px;">
+                    Auto-Sync All Team Members
+                </button>
+                <button onclick="quickTeamSetup()" style="padding: 8px; background: #FF9800; color: white; border: none; border-radius: 4px;">
+                    Quick Team Setup (All Nodes)
+                </button>
+            </div>
+        </div>
+        
+        <div class="team-section">
             <h4>All Teams</h4>
             <div id="teamsList"></div>
         </div>
@@ -354,6 +369,11 @@ async fn serve_basic_html() -> Html<&'static str> {
                         });
                         updateTeamsUI();
                         draw();
+                        
+                        // Check if this is part of a quick setup
+                        if (window.pendingQuickSetup) {
+                            completeQuickSetup(team.id);
+                        }
                     }
                     break;
                 case 'TeamJoined':
@@ -429,6 +449,33 @@ async fn serve_basic_html() -> Html<&'static str> {
             ctx.arc(x, y, radius, 0, 2 * Math.PI);
             ctx.fill();
             ctx.stroke();
+            
+            // Draw team indicators (small colored dots around the node)
+            if (node.teams && node.teams.length > 0) {
+                const dotRadius = 4;
+                const dotDistance = radius + 8;
+                node.teams.forEach((team, index) => {
+                    const angle = (index / node.teams.length) * 2 * Math.PI;
+                    const dotX = x + Math.cos(angle) * dotDistance;
+                    const dotY = y + Math.sin(angle) * dotDistance;
+                    
+                    // Use different colors for different roles
+                    let teamColor = '#2196F3'; // Member
+                    if (team.role === 'Owner') teamColor = '#FF5722';
+                    else if (team.role === 'Admin') teamColor = '#FF9800';
+                    else if (team.role === 'Operator') teamColor = '#9C27B0';
+                    
+                    ctx.fillStyle = teamColor;
+                    ctx.beginPath();
+                    ctx.arc(dotX, dotY, dotRadius, 0, 2 * Math.PI);
+                    ctx.fill();
+                    
+                    // Add white border
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                });
+            }
             
             // Draw name
             ctx.fillStyle = 'white';
@@ -724,11 +771,25 @@ async fn serve_basic_html() -> Html<&'static str> {
                 teams.forEach(team => {
                     const teamDiv = document.createElement('div');
                     teamDiv.className = 'team-item';
+                    
+                    // Find all nodes in this team
+                    const teamNodeNames = [];
+                    nodes.forEach(node => {
+                        if (node.teams && node.teams.some(t => t.id === team.id)) {
+                            const role = node.teams.find(t => t.id === team.id)?.role || 'Member';
+                            teamNodeNames.push(`${node.name} (${role})`);
+                        }
+                    });
+                    
                     teamDiv.innerHTML = `
                         <strong>${team.name}</strong> (${team.id.substring(0, 8)}...)
                         <div class="team-members">
                             Owner: ${getNodeName(team.owner_node_id)}<br>
-                            Members: ${team.members ? team.members.length : 1}
+                            Members: ${teamNodeNames.length}<br>
+                            ${teamNodeNames.length > 0 ? 
+                                `<small>${teamNodeNames.join(', ')}</small>` : 
+                                '<small>No members yet</small>'
+                            }
                         </div>
                     `;
                     teamsList.appendChild(teamDiv);
@@ -902,6 +963,180 @@ async fn serve_basic_html() -> Html<&'static str> {
                 team_id: teamId,
                 owner_node_id: team.owner_node_id
             }));
+        }
+
+        function addAllNodesToSelectedTeam() {
+            if (!selectedTeamId) {
+                alert('Please select a team first from the Sync Operations dropdown.');
+                return;
+            }
+
+            const team = teams.get(selectedTeamId);
+            if (!team) {
+                alert('Selected team not found.');
+                return;
+            }
+
+            // Find nodes that are running but not already in this team
+            const nodesToAdd = [];
+            nodes.forEach(node => {
+                if (node.status === 'Running') {
+                    // Check if node is already in this team
+                    const alreadyInTeam = node.teams && node.teams.some(t => t.id === selectedTeamId);
+                    if (!alreadyInTeam) {
+                        nodesToAdd.push(node);
+                    }
+                }
+            });
+
+            if (nodesToAdd.length === 0) {
+                alert('All running nodes are already in this team.');
+                return;
+            }
+
+            if (confirm(`Add ${nodesToAdd.length} nodes to team "${team.name}"?`)) {
+                nodesToAdd.forEach(node => {
+                    ws.send(JSON.stringify({
+                        type: 'JoinTeam',
+                        node_id: node.id,
+                        team_id: selectedTeamId,
+                        owner_node_id: team.owner_node_id
+                    }));
+                });
+            }
+        }
+
+        function autoSyncTeamMembers() {
+            if (!selectedTeamId) {
+                alert('Please select a team first from the Sync Operations dropdown.');
+                return;
+            }
+
+            const team = teams.get(selectedTeamId);
+            if (!team) {
+                alert('Selected team not found.');
+                return;
+            }
+
+            // Find all nodes in this team
+            const teamNodes = [];
+            nodes.forEach(node => {
+                if (node.teams && node.teams.some(t => t.id === selectedTeamId)) {
+                    teamNodes.push(node);
+                }
+            });
+
+            if (teamNodes.length < 2) {
+                alert('Need at least 2 nodes in the team to create sync connections.');
+                return;
+            }
+
+            let connectionCount = 0;
+            const connectionsToCreate = [];
+
+            // Create bidirectional sync connections between all team members
+            for (let i = 0; i < teamNodes.length; i++) {
+                for (let j = 0; j < teamNodes.length; j++) {
+                    if (i !== j) {
+                        const from = teamNodes[i].id;
+                        const to = teamNodes[j].id;
+                        
+                        // Check if connection already exists
+                        const connectionKey = `${from}-${to}-${selectedTeamId}`;
+                        if (!connections.has(connectionKey)) {
+                            connectionsToCreate.push({ from, to });
+                            connectionCount++;
+                        }
+                    }
+                }
+            }
+
+            if (connectionCount === 0) {
+                alert('All team members are already fully synced.');
+                return;
+            }
+
+            if (confirm(`Create ${connectionCount} sync connections between all team members?`)) {
+                connectionsToCreate.forEach(({ from, to }) => {
+                    ws.send(JSON.stringify({
+                        type: 'AddSyncConnection',
+                        from: from,
+                        to: to,
+                        team_id: selectedTeamId
+                    }));
+                });
+            }
+        }
+
+        function quickTeamSetup() {
+            const runningNodes = [];
+            nodes.forEach(node => {
+                if (node.status === 'Running') {
+                    runningNodes.push(node);
+                }
+            });
+
+            if (runningNodes.length === 0) {
+                alert('No running nodes available. Place and start some nodes first.');
+                return;
+            }
+
+            const teamName = prompt('Enter team name for quick setup:');
+            if (!teamName || !teamName.trim()) {
+                return;
+            }
+
+            if (confirm(`Quick setup will:\n1. Create team "${teamName}" with ${runningNodes[0].name} as owner\n2. Add all ${runningNodes.length} nodes to the team\n3. Create full mesh sync connections\n\nProceed?`)) {
+                // Step 1: Create team with first node as owner
+                const ownerNode = runningNodes[0];
+                ws.send(JSON.stringify({
+                    type: 'CreateTeam',
+                    node_id: ownerNode.id,
+                    team_name: teamName.trim()
+                }));
+
+                // Store the setup for completion after team is created
+                window.pendingQuickSetup = {
+                    teamName: teamName.trim(),
+                    ownerNodeId: ownerNode.id,
+                    allNodes: runningNodes
+                };
+            }
+        }
+
+        // Helper function to complete quick setup after team creation
+        function completeQuickSetup(teamId) {
+            const setup = window.pendingQuickSetup;
+            if (!setup) return;
+
+            // Step 2: Add remaining nodes to team
+            const nodesToAdd = setup.allNodes.filter(node => node.id !== setup.ownerNodeId);
+            nodesToAdd.forEach(node => {
+                setTimeout(() => {
+                    ws.send(JSON.stringify({
+                        type: 'JoinTeam',
+                        node_id: node.id,
+                        team_id: teamId,
+                        owner_node_id: setup.ownerNodeId
+                    }));
+                }, 500); // Small delay between requests
+            });
+
+            // Step 3: Create sync connections (with delay to let joins complete)
+            setTimeout(() => {
+                // Set the team as selected
+                selectedTeamId = teamId;
+                document.getElementById('teamSelector').value = teamId;
+                updateSelectedTeamInfo();
+
+                // Auto-sync all members
+                setTimeout(() => {
+                    autoSyncTeamMembers();
+                }, 2000); // Wait for joins to complete
+            }, 1000);
+
+            // Clear pending setup
+            delete window.pendingQuickSetup;
         }
 
         // Initialize
