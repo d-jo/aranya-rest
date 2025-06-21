@@ -2070,11 +2070,21 @@ async fn serve_basic_html() -> Html<&'static str> {
         let nodes = new Map();
         let connections = new Map();
         let teams = new Map();
-        let canvas = document.getElementById('canvas');
-        let ctx = canvas.getContext('2d');
+        let canvas = null;
+        let ctx = null;
         
         // Initialize canvas size
         function initializeCanvas() {
+            // Get canvas if not already initialized
+            if (!canvas) {
+                canvas = document.getElementById('canvas');
+                if (!canvas) {
+                    console.error('Canvas element not found');
+                    return;
+                }
+                ctx = canvas.getContext('2d');
+            }
+            
             const viewport = document.querySelector('.canvas-viewport');
             const rect = viewport.getBoundingClientRect();
             
@@ -2322,6 +2332,8 @@ async fn serve_basic_html() -> Html<&'static str> {
         }
 
         function draw() {
+            if (!ctx || !canvas) return;
+            
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             // Save context and apply viewport transformations
@@ -2392,6 +2404,9 @@ async fn serve_basic_html() -> Html<&'static str> {
             
             // Restore context
             ctx.restore();
+            
+            // Update message bubble positions after drawing
+            updateAllMessageBubbles();
         }
 
         function drawNode(node) {
@@ -2597,10 +2612,14 @@ async fn serve_basic_html() -> Html<&'static str> {
             return null;
         }
 
-        canvas.addEventListener('click', function(e) {
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+        // Add all canvas event listeners inside a setup function
+        function setupCanvasEventListeners() {
+            if (!canvas) return;
+            
+            canvas.addEventListener('click', function(e) {
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
             
             console.log(`Canvas click: screen(${x}, ${y}), canvas size(${canvas.width}, ${canvas.height}), viewport(${viewportX}, ${viewportY}), scale(${viewportScale})`);
             
@@ -2777,6 +2796,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             draw();
             schedulePreferenceSave();
         });
+        } // End of setupCanvasEventListeners
 
         // Hide context menu on click elsewhere
         document.addEventListener('click', function(e) {
@@ -3485,14 +3505,18 @@ async fn serve_basic_html() -> Html<&'static str> {
             const bubble = document.createElement('div');
             bubble.className = 'message-bubble';
             bubble.innerHTML = `<strong>${authorName}:</strong> ${message}`;
+            bubble.dataset.nodeId = nodeId; // Store node ID for position updates
             
             // Position bubble above node (convert world coordinates to screen)
-            const rect = canvas.getBoundingClientRect();
-            const screenPos = worldToScreen(node.position.x, node.position.y);
-            bubble.style.left = (rect.left + screenPos.x - 100) + 'px';
-            bubble.style.top = (rect.top + screenPos.y - 60) + 'px';
+            updateMessageBubblePosition(bubble, node);
             
             document.body.appendChild(bubble);
+            
+            // Store bubble reference
+            if (!messageBubbles.has(nodeId)) {
+                messageBubbles.set(nodeId, []);
+            }
+            messageBubbles.get(nodeId).push(bubble);
             
             // Animate in
             setTimeout(() => {
@@ -3503,9 +3527,41 @@ async fn serve_basic_html() -> Html<&'static str> {
             setTimeout(() => {
                 bubble.classList.remove('show');
                 setTimeout(() => {
-                    document.body.removeChild(bubble);
+                    if (bubble.parentNode) {
+                        document.body.removeChild(bubble);
+                    }
+                    // Remove from tracking
+                    const bubbles = messageBubbles.get(nodeId);
+                    if (bubbles) {
+                        const index = bubbles.indexOf(bubble);
+                        if (index > -1) {
+                            bubbles.splice(index, 1);
+                        }
+                        if (bubbles.length === 0) {
+                            messageBubbles.delete(nodeId);
+                        }
+                    }
                 }, 400);
             }, 6000);
+        }
+        
+        function updateMessageBubblePosition(bubble, node) {
+            if (!canvas) return;
+            const rect = canvas.getBoundingClientRect();
+            const screenPos = worldToScreen(node.position.x, node.position.y);
+            bubble.style.left = (rect.left + screenPos.x - 100) + 'px';
+            bubble.style.top = (rect.top + screenPos.y - 60) + 'px';
+        }
+        
+        function updateAllMessageBubbles() {
+            messageBubbles.forEach((bubbles, nodeId) => {
+                const node = nodes.get(nodeId);
+                if (node) {
+                    bubbles.forEach(bubble => {
+                        updateMessageBubblePosition(bubble, node);
+                    });
+                }
+            });
         }
 
         function updateRecentMessages() {
@@ -3611,6 +3667,7 @@ async fn serve_basic_html() -> Html<&'static str> {
 
         // Initialize
         initializeCanvas();
+        setupCanvasEventListeners();
         initializeTexturePacks();
         loadCustomTexturePack();
         loadAllTexturePacks();
