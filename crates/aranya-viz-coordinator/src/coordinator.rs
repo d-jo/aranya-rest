@@ -282,6 +282,185 @@ async fn serve_basic_html() -> Html<&'static str> {
             background-image: var(--texture-pattern);
             background-size: var(--texture-size, 20px 20px);
         }
+        
+        .texture-option.selected::after {
+            content: '✓';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 0 3px rgba(0,0,0,0.8);
+            background: none;
+            z-index: 1;
+        }
+        
+        .texture-option.custom {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .texture-option.custom::after {
+            display: none;
+        }
+        
+        .texture-option.custom:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+        }
+        
+        .custom-texture-panel {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .custom-texture-panel h5 {
+            margin: 0 0 0.75rem 0;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        
+        .file-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: var(--background-color);
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+        
+        .opacity-slider {
+            width: 100%;
+            margin: 0.25rem 0;
+        }
+        
+        .icon-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: var(--background-color);
+            font-size: 1.25rem;
+            text-align: center;
+            color: var(--text-primary);
+        }
+        
+        .individual-icons {
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: var(--background-color);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .node-icon-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem;
+            margin: 0.25rem 0;
+            background: var(--surface-color);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+        }
+        
+        .node-icon-item .node-id {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-family: monospace;
+        }
+        
+        .node-icon-item .icon-input {
+            width: 60px;
+            padding: 0.25rem;
+            margin: 0;
+        }
+        
+        .node-icon-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .icon-preview {
+            width: 40px;
+            height: 40px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--background-color);
+            font-size: 1.5rem;
+            overflow: hidden;
+        }
+        
+        .icon-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: var(--radius-sm);
+        }
+        
+        .icon-upload-btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        
+        .icon-upload-btn:hover {
+            background: var(--primary-color);
+        }
+        
+        .icon-clear-btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            background: var(--error-color);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        
+        .icon-clear-btn:hover {
+            background: #dc2626;
+        }
+        
+        .hidden-file-input {
+            display: none;
+        }
+        
+        .custom-texture-actions {
+            margin-top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .custom-texture-actions .btn {
+            flex: 1;
+            padding: 0.5rem;
+            font-size: 0.875rem;
+        }
         .panel {
             background: var(--surface-color);
             border-radius: var(--radius-lg);
@@ -584,6 +763,34 @@ async fn serve_basic_html() -> Html<&'static str> {
                         <div class="texture-option" data-theme="dark" title="Dark Theme"></div>
                         <div class="texture-option" data-theme="blueprint" title="Blueprint"></div>
                         <div class="texture-option" data-theme="organic" title="Organic"></div>
+                        <div class="texture-option custom" data-theme="custom" title="Custom Texture Pack">+</div>
+                    </div>
+                    
+                    <div id="customTexturePanel" class="custom-texture-panel" style="display: none;">
+                        <h5>📸 Custom Background</h5>
+                        <div class="form-group">
+                            <label for="backgroundUpload">Upload Background Image:</label>
+                            <input type="file" id="backgroundUpload" accept="image/*" class="file-input">
+                        </div>
+                        <div class="form-group">
+                            <label for="backgroundOpacity">Background Opacity:</label>
+                            <input type="range" id="backgroundOpacity" min="0" max="100" value="80" class="opacity-slider">
+                            <span id="opacityValue">80%</span>
+                        </div>
+                        
+                        <h5>🎯 Node Icons</h5>
+                        <div class="node-icon-section">
+                            <div class="form-group">
+                                <label>Default Icon for New Nodes:</label>
+                                <input type="text" id="defaultNodeIcon" value="🔵" placeholder="🔵" class="icon-input">
+                            </div>
+                            <div id="individualNodeIcons" class="individual-icons"></div>
+                        </div>
+                        
+                        <div class="custom-texture-actions">
+                            <button id="saveCustomTexture" class="btn btn-primary">Save Custom Pack</button>
+                            <button id="resetCustomTexture" class="btn btn-secondary">Reset</button>
+                        </div>
                     </div>
                 </div>
                 
@@ -847,8 +1054,25 @@ async fn serve_basic_html() -> Html<&'static str> {
                 pattern: 'radial-gradient(circle at 20px 20px, rgba(255,255,255,.1) 1px, transparent 1px)',
                 size: '40px 40px',
                 nodeIcons: '🟢'
+            },
+            custom: {
+                name: 'Custom Texture Pack',
+                bg: '#f8fafc',
+                pattern: null,
+                backgroundImage: null,
+                backgroundOpacity: 80,
+                size: '40px 40px',
+                nodeIcons: '🔵',
+                customNodeIcons: new Map(), // nodeId -> icon (text/emoji)
+                customNodeImages: new Map() // nodeId -> image data URL
             }
         };
+        
+        // Custom texture pack management
+        let customBackgroundImage = null;
+        
+        // Image cache for node icons
+        const nodeImageCache = new Map(); // imageData -> HTMLImageElement
         
         let currentTexturePack = 'default';
         
@@ -859,16 +1083,331 @@ async fn serve_basic_html() -> Html<&'static str> {
                 const theme = option.dataset.theme;
                 const pack = texturePacks[theme];
                 
-                if (pack) {
+                if (pack && theme !== 'custom') {
                     option.style.setProperty('--texture-bg', pack.bg);
                     option.style.setProperty('--texture-pattern', pack.pattern);
                     option.style.setProperty('--texture-size', pack.size);
-                    
-                    option.addEventListener('click', () => {
+                }
+                
+                option.addEventListener('click', () => {
+                    if (theme === 'custom') {
+                        toggleCustomTexturePanel();
+                    } else {
                         setTexturePack(theme);
-                    });
+                    }
+                });
+            });
+            
+            // Initialize custom texture pack controls
+            initializeCustomTextureControls();
+        }
+        
+        function toggleCustomTexturePanel() {
+            const panel = document.getElementById('customTexturePanel');
+            const isVisible = panel.style.display !== 'none';
+            
+            if (isVisible) {
+                panel.style.display = 'none';
+            } else {
+                panel.style.display = 'block';
+                updateIndividualNodeIcons();
+                setTexturePack('custom');
+            }
+        }
+        
+        function initializeCustomTextureControls() {
+            // Background upload
+            const backgroundUpload = document.getElementById('backgroundUpload');
+            backgroundUpload.addEventListener('change', handleBackgroundUpload);
+            
+            // Opacity slider
+            const opacitySlider = document.getElementById('backgroundOpacity');
+            const opacityValue = document.getElementById('opacityValue');
+            opacitySlider.addEventListener('input', (e) => {
+                const opacity = parseInt(e.target.value);
+                texturePacks.custom.backgroundOpacity = opacity;
+                opacityValue.textContent = opacity + '%';
+                if (currentTexturePack === 'custom') {
+                    updateCustomBackground();
                 }
             });
+            
+            // Default node icon
+            const defaultNodeIcon = document.getElementById('defaultNodeIcon');
+            defaultNodeIcon.addEventListener('input', (e) => {
+                texturePacks.custom.nodeIcons = e.target.value || '🔵';
+                if (currentTexturePack === 'custom') {
+                    draw();
+                }
+            });
+            
+            // Save and reset buttons
+            document.getElementById('saveCustomTexture').addEventListener('click', saveCustomTexturePack);
+            document.getElementById('resetCustomTexture').addEventListener('click', resetCustomTexturePack);
+        }
+        
+        function handleBackgroundUpload(event) {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    customBackgroundImage = e.target.result;
+                    texturePacks.custom.backgroundImage = customBackgroundImage;
+                    if (currentTexturePack === 'custom') {
+                        updateCustomBackground();
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        function updateCustomBackground() {
+            // For custom backgrounds with images, we'll draw them in the canvas
+            // instead of using CSS, so we can apply viewport transformations
+            const viewport = document.querySelector('.canvas-viewport');
+            const pack = texturePacks.custom;
+            
+            if (pack.backgroundImage) {
+                // Clear CSS background since we'll draw in canvas
+                viewport.style.setProperty('--texture-bg', 'transparent');
+                viewport.style.setProperty('--texture-pattern', 'none');
+                viewport.style.opacity = 1;
+                
+                // Create background image element if not cached
+                if (!customBackgroundImage || customBackgroundImage.src !== pack.backgroundImage) {
+                    customBackgroundImage = new Image();
+                    customBackgroundImage.src = pack.backgroundImage;
+                    customBackgroundImage.onload = () => {
+                        draw(); // Redraw when image loads
+                    };
+                }
+            } else {
+                // Use CSS background for non-image patterns
+                viewport.style.setProperty('--texture-bg', pack.bg);
+                viewport.style.setProperty('--texture-pattern', pack.pattern || 'none');
+                viewport.style.setProperty('--texture-size', pack.size);
+                viewport.style.opacity = 1;
+                customBackgroundImage = null;
+            }
+            
+            draw();
+        }
+        
+        function updateIndividualNodeIcons() {
+            const container = document.getElementById('individualNodeIcons');
+            container.innerHTML = '';
+            
+            if (nodes.size === 0) {
+                container.innerHTML = '<div style="color: var(--text-secondary); font-style: italic; font-size: 0.875rem;">No nodes available. Create some nodes first.</div>';
+                return;
+            }
+            
+            nodes.forEach((node, nodeId) => {
+                const item = document.createElement('div');
+                item.className = 'node-icon-item';
+                
+                const nodeLabel = document.createElement('span');
+                nodeLabel.className = 'node-id';
+                nodeLabel.textContent = `${node.name || 'Node'} (${nodeId.slice(0, 8)}...)`;
+                
+                const controlsContainer = document.createElement('div');
+                controlsContainer.className = 'node-icon-controls';
+                
+                // Icon preview
+                const iconPreview = document.createElement('div');
+                iconPreview.className = 'icon-preview';
+                
+                const customImage = texturePacks.custom.customNodeImages.get(nodeId);
+                const customIcon = texturePacks.custom.customNodeIcons.get(nodeId);
+                
+                if (customImage) {
+                    const img = document.createElement('img');
+                    img.src = customImage;
+                    img.title = 'Custom image';
+                    iconPreview.appendChild(img);
+                } else if (customIcon) {
+                    iconPreview.textContent = customIcon;
+                } else {
+                    iconPreview.textContent = texturePacks.custom.nodeIcons;
+                }
+                
+                // Text/Emoji input
+                const iconInput = document.createElement('input');
+                iconInput.type = 'text';
+                iconInput.className = 'icon-input';
+                iconInput.placeholder = '🔵';
+                iconInput.value = customIcon || '';
+                iconInput.addEventListener('input', (e) => {
+                    const icon = e.target.value;
+                    if (icon) {
+                        texturePacks.custom.customNodeIcons.set(nodeId, icon);
+                    } else {
+                        texturePacks.custom.customNodeIcons.delete(nodeId);
+                    }
+                    // Clear image if text is set
+                    if (icon && texturePacks.custom.customNodeImages.has(nodeId)) {
+                        texturePacks.custom.customNodeImages.delete(nodeId);
+                    }
+                    updateNodeIconPreview(nodeId, iconPreview);
+                    if (currentTexturePack === 'custom') {
+                        draw();
+                    }
+                });
+                
+                // Hidden file input for image upload
+                const fileInput = document.createElement('input');
+                fileInput.type = 'file';
+                fileInput.accept = 'image/*';
+                fileInput.className = 'hidden-file-input';
+                fileInput.addEventListener('change', (e) => {
+                    handleNodeImageUpload(e, nodeId, iconPreview);
+                });
+                
+                // Upload button
+                const uploadBtn = document.createElement('button');
+                uploadBtn.className = 'icon-upload-btn';
+                uploadBtn.textContent = 'Image';
+                uploadBtn.title = 'Upload image for this node';
+                uploadBtn.addEventListener('click', () => {
+                    fileInput.click();
+                });
+                
+                // Clear button
+                const clearBtn = document.createElement('button');
+                clearBtn.className = 'icon-clear-btn';
+                clearBtn.textContent = '×';
+                clearBtn.title = 'Clear custom icon/image';
+                clearBtn.addEventListener('click', () => {
+                    texturePacks.custom.customNodeIcons.delete(nodeId);
+                    texturePacks.custom.customNodeImages.delete(nodeId);
+                    iconInput.value = '';
+                    updateNodeIconPreview(nodeId, iconPreview);
+                    if (currentTexturePack === 'custom') {
+                        draw();
+                    }
+                });
+                
+                controlsContainer.appendChild(iconPreview);
+                controlsContainer.appendChild(iconInput);
+                controlsContainer.appendChild(uploadBtn);
+                controlsContainer.appendChild(clearBtn);
+                controlsContainer.appendChild(fileInput);
+                
+                item.appendChild(nodeLabel);
+                item.appendChild(controlsContainer);
+                container.appendChild(item);
+            });
+        }
+        
+        function updateNodeIconPreview(nodeId, previewElement) {
+            previewElement.innerHTML = '';
+            
+            const customImage = texturePacks.custom.customNodeImages.get(nodeId);
+            const customIcon = texturePacks.custom.customNodeIcons.get(nodeId);
+            
+            if (customImage) {
+                const img = document.createElement('img');
+                img.src = customImage;
+                img.title = 'Custom image';
+                previewElement.appendChild(img);
+            } else if (customIcon) {
+                previewElement.textContent = customIcon;
+            } else {
+                previewElement.textContent = texturePacks.custom.nodeIcons;
+            }
+        }
+        
+        function handleNodeImageUpload(event, nodeId, previewElement) {
+            const file = event.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const imageData = e.target.result;
+                    texturePacks.custom.customNodeImages.set(nodeId, imageData);
+                    // Clear text icon when image is set
+                    texturePacks.custom.customNodeIcons.delete(nodeId);
+                    // Update preview
+                    updateNodeIconPreview(nodeId, previewElement);
+                    // Clear the text input
+                    const iconInput = previewElement.parentElement.querySelector('.icon-input');
+                    if (iconInput) iconInput.value = '';
+                    // Redraw if custom texture pack is active
+                    if (currentTexturePack === 'custom') {
+                        draw();
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        function saveCustomTexturePack() {
+            // Save to localStorage for persistence
+            const customPack = {
+                backgroundImage: texturePacks.custom.backgroundImage,
+                backgroundOpacity: texturePacks.custom.backgroundOpacity,
+                nodeIcons: texturePacks.custom.nodeIcons,
+                customNodeIcons: Array.from(texturePacks.custom.customNodeIcons.entries()),
+                customNodeImages: Array.from(texturePacks.custom.customNodeImages.entries())
+            };
+            
+            localStorage.setItem('aranya-custom-texture-pack', JSON.stringify(customPack));
+            
+            // Show confirmation
+            const button = document.getElementById('saveCustomTexture');
+            const originalText = button.textContent;
+            button.textContent = 'Saved!';
+            button.style.background = 'var(--success-color)';
+            setTimeout(() => {
+                button.textContent = originalText;
+                button.style.background = '';
+            }, 2000);
+        }
+        
+        function loadCustomTexturePack() {
+            const saved = localStorage.getItem('aranya-custom-texture-pack');
+            if (saved) {
+                try {
+                    const customPack = JSON.parse(saved);
+                    texturePacks.custom.backgroundImage = customPack.backgroundImage;
+                    texturePacks.custom.backgroundOpacity = customPack.backgroundOpacity || 80;
+                    texturePacks.custom.nodeIcons = customPack.nodeIcons || '🔵';
+                    texturePacks.custom.customNodeIcons = new Map(customPack.customNodeIcons || []);
+                    texturePacks.custom.customNodeImages = new Map(customPack.customNodeImages || []);
+                    
+                    // Update UI
+                    document.getElementById('backgroundOpacity').value = texturePacks.custom.backgroundOpacity;
+                    document.getElementById('opacityValue').textContent = texturePacks.custom.backgroundOpacity + '%';
+                    document.getElementById('defaultNodeIcon').value = texturePacks.custom.nodeIcons;
+                    
+                    customBackgroundImage = texturePacks.custom.backgroundImage;
+                } catch (e) {
+                    console.warn('Failed to load custom texture pack:', e);
+                }
+            }
+        }
+        
+        function resetCustomTexturePack() {
+            // Reset custom texture pack to defaults
+            texturePacks.custom.backgroundImage = null;
+            texturePacks.custom.backgroundOpacity = 80;
+            texturePacks.custom.nodeIcons = '🔵';
+            texturePacks.custom.customNodeIcons.clear();
+            texturePacks.custom.customNodeImages.clear();
+            customBackgroundImage = null;
+            
+            // Reset UI
+            document.getElementById('backgroundUpload').value = '';
+            document.getElementById('backgroundOpacity').value = 80;
+            document.getElementById('opacityValue').textContent = '80%';
+            document.getElementById('defaultNodeIcon').value = '🔵';
+            
+            // Clear localStorage
+            localStorage.removeItem('aranya-custom-texture-pack');
+            
+            updateIndividualNodeIcons();
+            if (currentTexturePack === 'custom') {
+                updateCustomBackground();
+            }
         }
         
         function setTexturePack(packName) {
@@ -887,9 +1426,15 @@ async fn serve_basic_html() -> Html<&'static str> {
             
             // Apply theme to canvas viewport
             const viewport = document.querySelector('.canvas-viewport');
-            viewport.style.setProperty('--texture-bg', pack.bg);
-            viewport.style.setProperty('--texture-pattern', pack.pattern);
-            viewport.style.setProperty('--texture-size', pack.size);
+            
+            if (packName === 'custom') {
+                updateCustomBackground();
+            } else {
+                viewport.style.setProperty('--texture-bg', pack.bg);
+                viewport.style.setProperty('--texture-pattern', pack.pattern);
+                viewport.style.setProperty('--texture-size', pack.size);
+                viewport.style.opacity = 1;
+            }
             
             // Update CSS variables for dark theme
             if (packName === 'dark') {
@@ -1001,12 +1546,30 @@ async fn serve_basic_html() -> Html<&'static str> {
                 case 'NodeCreated':
                     nodes.set(message.node.id, message.node);
                     updateNodeSelectors();
+                    // Update individual node icons if custom texture panel is open
+                    if (document.getElementById('customTexturePanel').style.display !== 'none') {
+                        updateIndividualNodeIcons();
+                    }
                     draw();
                     break;
                 case 'NodeDeleted':
                     nodes.delete(message.node_id);
+                    // Remove from custom node icons and images
+                    if (texturePacks.custom.customNodeIcons.has(message.node_id)) {
+                        texturePacks.custom.customNodeIcons.delete(message.node_id);
+                    }
+                    if (texturePacks.custom.customNodeImages.has(message.node_id)) {
+                        // Clean up image cache
+                        const imageData = texturePacks.custom.customNodeImages.get(message.node_id);
+                        nodeImageCache.delete(imageData);
+                        texturePacks.custom.customNodeImages.delete(message.node_id);
+                    }
                     updateTeamsUI();
                     updateNodeSelectors();
+                    // Update individual node icons if custom texture panel is open
+                    if (document.getElementById('customTexturePanel').style.display !== 'none') {
+                        updateIndividualNodeIcons();
+                    }
                     draw();
                     break;
                 case 'NodeMoved':
@@ -1153,6 +1716,25 @@ async fn serve_basic_html() -> Html<&'static str> {
             ctx.translate(viewportX, viewportY);
             ctx.scale(viewportScale, viewportScale);
             
+            // Draw custom background image if available (game map style)
+            if (currentTexturePack === 'custom' && customBackgroundImage && customBackgroundImage.complete) {
+                const pack = texturePacks.custom;
+                const opacity = pack.backgroundOpacity / 100;
+                
+                ctx.save();
+                ctx.globalAlpha = opacity;
+                
+                // Draw background image to cover the entire virtual canvas area
+                // This makes the background behave like a game map that moves/zooms with the viewport
+                ctx.drawImage(
+                    customBackgroundImage,
+                    0, 0,  // Start at virtual canvas origin
+                    CANVAS_WIDTH, CANVAS_HEIGHT  // Cover entire virtual canvas
+                );
+                
+                ctx.restore();
+            }
+            
             // Draw virtual canvas boundaries
             ctx.strokeStyle = '#ccc';
             ctx.lineWidth = 2 / viewportScale;
@@ -1249,23 +1831,87 @@ async fn serve_basic_html() -> Html<&'static str> {
             
             // Draw node icon or name based on texture pack
             const pack = texturePacks[currentTexturePack];
-            if (pack.nodeIcons && pack.nodeIcons !== '🔵') {
-                // Draw icon
+            let nodeIcon = pack.nodeIcons;
+            let nodeImage = null;
+            
+            // Check for individual node customization in custom texture pack
+            if (currentTexturePack === 'custom') {
+                // Check for uploaded image first (highest priority)
+                if (pack.customNodeImages && pack.customNodeImages.has(node.id)) {
+                    const imageData = pack.customNodeImages.get(node.id);
+                    nodeImage = getOrCreateImageElement(imageData);
+                }
+                // Otherwise check for custom text/emoji icon
+                else if (pack.customNodeIcons && pack.customNodeIcons.has(node.id)) {
+                    nodeIcon = pack.customNodeIcons.get(node.id);
+                }
+            }
+            
+            if (nodeImage && nodeImage.complete) {
+                // Draw uploaded image
+                const imageSize = 40; // Size of the image icon
+                ctx.save();
+                
+                // Create circular clipping path
+                ctx.beginPath();
+                ctx.arc(x, y, imageSize / 2, 0, 2 * Math.PI);
+                ctx.clip();
+                
+                // Draw image centered
+                ctx.drawImage(
+                    nodeImage, 
+                    x - imageSize / 2, 
+                    y - imageSize / 2, 
+                    imageSize, 
+                    imageSize
+                );
+                
+                ctx.restore();
+                
+                // Draw name below image
+                ctx.fillStyle = currentTexturePack === 'dark' ? 'white' : '#333';
+                ctx.font = 'bold 12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.name, x, y + 50);
+            } else if (nodeIcon && nodeIcon !== '🔵') {
+                // Draw text/emoji icon
                 ctx.font = '24px Arial';
                 ctx.textAlign = 'center';
-                ctx.fillText(pack.nodeIcons, x, y + 8);
+                ctx.fillStyle = currentTexturePack === 'dark' ? 'white' : '#333';
+                ctx.fillText(nodeIcon, x, y + 8);
                 
                 // Draw name below
                 ctx.fillStyle = currentTexturePack === 'dark' ? 'white' : '#333';
-                ctx.font = '10px Arial';
-                ctx.fillText(node.name, x, y + 45);
+                ctx.font = 'bold 12px Arial';
+                ctx.fillText(node.name, x, y + 50);
             } else {
-                // Draw name in center
+                // Draw name in center (default behavior)
                 ctx.fillStyle = 'white';
-                ctx.font = '12px Arial';
+                ctx.font = 'bold 14px Arial';
                 ctx.textAlign = 'center';
                 ctx.fillText(node.name, x, y + 4);
             }
+        }
+        
+        function getOrCreateImageElement(imageData) {
+            // Check cache first
+            if (nodeImageCache.has(imageData)) {
+                return nodeImageCache.get(imageData);
+            }
+            
+            // Create new image element
+            const img = new Image();
+            img.src = imageData;
+            nodeImageCache.set(imageData, img);
+            
+            // Redraw when image loads
+            img.onload = () => {
+                if (currentTexturePack === 'custom') {
+                    draw();
+                }
+            };
+            
+            return img;
         }
 
         function drawArrow(fromNode, toNode, color = '#666') {
@@ -2349,6 +2995,7 @@ async fn serve_basic_html() -> Html<&'static str> {
         // Initialize
         initializeCanvas();
         initializeTexturePacks();
+        loadCustomTexturePack();
         connectWebSocket();
     </script>
 </body>
