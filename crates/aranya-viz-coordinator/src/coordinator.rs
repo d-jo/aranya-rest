@@ -230,6 +230,84 @@ async fn serve_basic_html() -> Html<&'static str> {
             color: var(--text-secondary);
         }
         
+        .notification-area {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 350px;
+            z-index: 10000;
+            pointer-events: none;
+        }
+        
+        .notification {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            box-shadow: var(--shadow-lg);
+            animation: slideIn 0.3s ease-out;
+            pointer-events: auto;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+        
+        .notification.success {
+            border-left: 4px solid var(--success-color);
+        }
+        
+        .notification.warning {
+            border-left: 4px solid var(--warning-color);
+        }
+        
+        .notification.error {
+            border-left: 4px solid var(--error-color);
+        }
+        
+        .notification.info {
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .notification-icon {
+            font-size: 1.25rem;
+            flex-shrink: 0;
+        }
+        
+        .notification-content {
+            flex: 1;
+        }
+        
+        .notification-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+        
+        .notification-message {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+            }
+        }
+        
         .texture-selector {
             background: var(--surface-color);
             border-radius: var(--radius-lg);
@@ -1172,6 +1250,9 @@ async fn serve_basic_html() -> Html<&'static str> {
         <div class="status" id="status">
             Connecting to WebSocket...
         </div>
+        
+        <div class="notification-area" id="notificationArea">
+        </div>
     </div>
 
     <div class="context-menu" id="contextMenu">
@@ -1766,7 +1847,7 @@ async fn serve_basic_html() -> Html<&'static str> {
         function saveAsNewTexturePack() {
             const packName = document.getElementById('texturePackName').value.trim();
             if (!packName) {
-                alert('Please enter a name for your texture pack');
+                showNotification('Please enter a name for your texture pack', 'warning');
                 return;
             }
             
@@ -1797,13 +1878,13 @@ async fn serve_basic_html() -> Html<&'static str> {
         
         function updateCurrentTexturePack() {
             if (!currentCustomPackId) {
-                alert('No texture pack is currently loaded. Use "Save As New Pack" instead.');
+                showNotification('No texture pack is currently loaded. Use "Save As New Pack" instead.', 'warning');
                 return;
             }
             
             const packData = savedTexturePacks.get(currentCustomPackId);
             if (!packData) {
-                alert('Current texture pack not found. Use "Save As New Pack" instead.');
+                showNotification('Current texture pack not found. Use "Save As New Pack" instead.', 'warning');
                 return;
             }
             
@@ -1826,7 +1907,7 @@ async fn serve_basic_html() -> Html<&'static str> {
         function loadTexturePack(packId) {
             const packData = savedTexturePacks.get(packId);
             if (!packData) {
-                alert('Texture pack not found');
+                showNotification('Texture pack not found', 'error');
                 return;
             }
             
@@ -2244,6 +2325,8 @@ async fn serve_basic_html() -> Html<&'static str> {
                         // Check if this is part of a quick setup
                         if (window.pendingQuickSetup) {
                             completeQuickSetup(team.id);
+                        } else {
+                            showNotification(`Team "${team.name}" created successfully!`, 'success');
                         }
                     }
                     break;
@@ -2258,6 +2341,11 @@ async fn serve_basic_html() -> Html<&'static str> {
                         }
                         updateTeamsUI();
                         draw();
+                        
+                        // Only show notification if not part of bulk operations
+                        if (!window.pendingQuickSetup) {
+                            showNotification(`${joinedNode.name} joined team "${message.team.name}"`, 'success');
+                        }
                     }
                     break;
                 case 'MessageSent':
@@ -2329,6 +2417,50 @@ async fn serve_basic_html() -> Html<&'static str> {
                     }
                     break;
             }
+        }
+
+        // Notification system
+        let suppressNotifications = false;
+        
+        function showNotification(message, type = 'info', title = null) {
+            // Skip if notifications are suppressed
+            if (suppressNotifications) return;
+            
+            const notificationArea = document.getElementById('notificationArea');
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            
+            const icons = {
+                success: '✅',
+                warning: '⚠️',
+                error: '❌',
+                info: 'ℹ️'
+            };
+            
+            const titles = {
+                success: 'Success',
+                warning: 'Warning', 
+                error: 'Error',
+                info: 'Info'
+            };
+            
+            notification.innerHTML = `
+                <div class="notification-icon">${icons[type]}</div>
+                <div class="notification-content">
+                    <div class="notification-title">${title || titles[type]}</div>
+                    <div class="notification-message">${message}</div>
+                </div>
+            `;
+            
+            notificationArea.appendChild(notification);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                notification.style.animation = 'fadeOut 0.3s ease-out';
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }, 5000);
         }
 
         function draw() {
@@ -2655,7 +2787,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                     } else if (connectStart !== nodeId) {
                         // Complete connection
                         if (!selectedTeamId) {
-                            alert('Please select a team for sync operations first!');
+                            showNotification('Please select a team for sync operations first!', 'warning');
                             return;
                         }
                         ws.send(JSON.stringify({
@@ -2870,7 +3002,12 @@ async fn serve_basic_html() -> Html<&'static str> {
                         if (conn.from === contextMenuNode) outgoingCount++;
                     });
                     
-                    alert(`Node Info:\nName: ${node.name}\nStatus: ${JSON.stringify(node.status)}\nDaemon Port: ${node.daemon_port}\nREST Port: ${node.rest_port}\n\nConnections:\nIncoming: ${incomingCount}\nOutgoing: ${outgoingCount}`);
+                    const info = `<strong>${node.name}</strong><br>
+Status: ${JSON.stringify(node.status)}<br>
+Daemon Port: ${node.daemon_port}<br>
+REST Port: ${node.rest_port}<br>
+Connections: ${incomingCount} in, ${outgoingCount} out`;
+                    showNotification(info, 'info', 'Node Information');
                 }
                 document.getElementById('contextMenu').style.display = 'none';
             }
@@ -3086,7 +3223,7 @@ async fn serve_basic_html() -> Html<&'static str> {
         function joinTeamDialog() {
             if (contextMenuNode) {
                 if (teams.size === 0) {
-                    alert('No teams available to join. Create a team first.');
+                    showNotification('No teams available to join. Create a team first.', 'info');
                     return;
                 }
                 
@@ -3106,7 +3243,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                             owner_node_id: team.owner_node_id
                         }));
                     } else {
-                        alert('Team not found!');
+                        showNotification('Team not found!', 'error');
                     }
                 }
                 document.getElementById('contextMenu').style.display = 'none';
@@ -3121,12 +3258,12 @@ async fn serve_basic_html() -> Html<&'static str> {
             const teamName = teamNameInput.value.trim();
             
             if (!nodeId) {
-                alert('Please select a node to create the team.');
+                showNotification('Please select a node to create the team.', 'warning');
                 return;
             }
             
             if (!teamName) {
-                alert('Please enter a team name.');
+                showNotification('Please enter a team name.', 'warning');
                 return;
             }
             
@@ -3136,6 +3273,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                 team_name: teamName
             }));
             
+            showNotification(`Creating team "${teamName}"...`, 'info');
             // Clear the input
             teamNameInput.value = '';
         }
@@ -3148,18 +3286,18 @@ async fn serve_basic_html() -> Html<&'static str> {
             const teamId = availableTeamsSelector.value;
             
             if (!nodeId) {
-                alert('Please select a node to join the team.');
+                showNotification('Please select a node to join the team.', 'warning');
                 return;
             }
             
             if (!teamId) {
-                alert('Please select a team to join.');
+                showNotification('Please select a team to join.', 'warning');
                 return;
             }
             
             const team = teams.get(teamId);
             if (!team) {
-                alert('Selected team not found.');
+                showNotification('Selected team not found.', 'error');
                 return;
             }
             
@@ -3169,17 +3307,20 @@ async fn serve_basic_html() -> Html<&'static str> {
                 team_id: teamId,
                 owner_node_id: team.owner_node_id
             }));
+            
+            const node = nodes.get(nodeId);
+            showNotification(`Adding ${node ? node.name : 'node'} to team "${team.name}"...`, 'info');
         }
 
         function addAllNodesToSelectedTeam() {
             if (!selectedTeamId) {
-                alert('Please select a team first from the Sync Operations dropdown.');
+                showNotification('Please select a team first from the dropdown.', 'warning');
                 return;
             }
 
             const team = teams.get(selectedTeamId);
             if (!team) {
-                alert('Selected team not found.');
+                showNotification('Selected team not found.', 'error');
                 return;
             }
 
@@ -3196,11 +3337,14 @@ async fn serve_basic_html() -> Html<&'static str> {
             });
 
             if (nodesToAdd.length === 0) {
-                alert('All running nodes are already in this team.');
+                showNotification('All running nodes are already in this team.', 'info');
                 return;
             }
 
             if (confirm(`Add ${nodesToAdd.length} nodes to team "${team.name}"?`)) {
+                // Suppress notifications during bulk operation
+                suppressNotifications = true;
+                
                 nodesToAdd.forEach(node => {
                     ws.send(JSON.stringify({
                         type: 'JoinTeam',
@@ -3209,18 +3353,24 @@ async fn serve_basic_html() -> Html<&'static str> {
                         owner_node_id: team.owner_node_id
                     }));
                 });
+                
+                // Show single notification after operations are sent
+                setTimeout(() => {
+                    suppressNotifications = false;
+                    showNotification(`Adding ${nodesToAdd.length} nodes to team "${team.name}"`, 'success');
+                }, 100);
             }
         }
 
         function autoSyncTeamMembers() {
             if (!selectedTeamId) {
-                alert('Please select a team first from the Sync Operations dropdown.');
+                showNotification('Please select a team first from the dropdown.', 'warning');
                 return;
             }
 
             const team = teams.get(selectedTeamId);
             if (!team) {
-                alert('Selected team not found.');
+                showNotification('Selected team not found.', 'error');
                 return;
             }
 
@@ -3233,7 +3383,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             });
 
             if (teamNodes.length < 2) {
-                alert('Need at least 2 nodes in the team to create sync connections.');
+                showNotification('Need at least 2 nodes in the team to create sync connections.', 'warning');
                 return;
             }
 
@@ -3258,11 +3408,14 @@ async fn serve_basic_html() -> Html<&'static str> {
             }
 
             if (connectionCount === 0) {
-                alert('All team members are already fully synced.');
+                showNotification('All team members are already fully synced.', 'info');
                 return;
             }
 
             if (confirm(`Create ${connectionCount} sync connections between all team members?`)) {
+                // Suppress notifications during bulk operation
+                suppressNotifications = true;
+                
                 connectionsToCreate.forEach(({ from, to }) => {
                     ws.send(JSON.stringify({
                         type: 'AddSyncConnection',
@@ -3271,25 +3424,31 @@ async fn serve_basic_html() -> Html<&'static str> {
                         team_id: selectedTeamId
                     }));
                 });
+                
+                // Show single notification after operations are sent
+                setTimeout(() => {
+                    suppressNotifications = false;
+                    showNotification(`Creating ${connectionCount} sync connections between team members`, 'success', 'Auto-Sync');
+                }, 100);
             }
         }
 
         function syncAllMembersFromOwner() {
             if (!selectedTeamId) {
-                alert('Please select a team first from the Sync Operations dropdown.');
+                showNotification('Please select a team first from the dropdown.', 'warning');
                 return;
             }
 
             const team = teams.get(selectedTeamId);
             if (!team) {
-                alert('Selected team not found.');
+                showNotification('Selected team not found.', 'error');
                 return;
             }
 
             // Find the owner node
             const ownerNode = nodes.get(team.owner_node_id);
             if (!ownerNode || ownerNode.status !== 'Running') {
-                alert('Team owner node is not running. Cannot create sync connections.');
+                showNotification('Team owner node is not running. Cannot create sync connections.', 'error');
                 return;
             }
 
@@ -3305,7 +3464,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             });
 
             if (memberNodes.length === 0) {
-                alert('No other running team members found. Add more nodes to the team first.');
+                showNotification('No other running team members found. Add more nodes to the team first.', 'warning');
                 return;
             }
 
@@ -3313,7 +3472,16 @@ async fn serve_basic_html() -> Html<&'static str> {
             const ownerName = ownerNode.name;
             const memberNames = memberNodes.map(n => n.name).join(', ');
 
-            if (confirm(`Make ${ownerName} (Owner) a sync peer for ${connectionCount} team members?\n\nThis will create sync connections FROM each member TO the owner:\n${memberNames}\n\nThis ensures all members receive commands from the owner.`)) {
+            // Skip confirmation if called from quick setup (notifications are already suppressed)
+            const skipConfirm = window.pendingQuickSetup && window.pendingQuickSetup.isQuickSetup;
+            
+            if (skipConfirm || confirm(`Make ${ownerName} (Owner) a sync peer for ${connectionCount} team members?\n\nThis will create sync connections FROM each member TO the owner:\n${memberNames}\n\nThis ensures all members receive commands from the owner.`)) {
+                // Only suppress if not already suppressed
+                const wasSuppressed = suppressNotifications;
+                if (!wasSuppressed) {
+                    suppressNotifications = true;
+                }
+                
                 // Create sync connections from each member to the owner
                 // This means each member will sync FROM the owner (receive owner's commands)
                 memberNodes.forEach(memberNode => {
@@ -3325,7 +3493,13 @@ async fn serve_basic_html() -> Html<&'static str> {
                     }));
                 });
 
-                alert(`Creating ${connectionCount} sync connections from team members to owner ${ownerName}. This will help ensure all members receive owner commands for team management.`);
+                // Only show notification if not called from quick setup
+                if (!wasSuppressed) {
+                    setTimeout(() => {
+                        suppressNotifications = false;
+                        showNotification(`Creating ${connectionCount} sync connections to owner ${ownerName}`, 'success', 'Owner Sync');
+                    }, 100);
+                }
             }
         }
 
@@ -3338,31 +3512,34 @@ async fn serve_basic_html() -> Html<&'static str> {
             });
 
             if (runningNodes.length === 0) {
-                alert('No running nodes available. Place and start some nodes first.');
+                showNotification('No running nodes available. Place and start some nodes first.', 'warning');
                 return;
             }
 
-            const teamName = prompt('Enter team name for quick setup:');
+            const teamName = prompt(`Quick Team Setup\n\nThis will:\n1. Create a new team with ${runningNodes[0].name} as owner\n2. Add all ${runningNodes.length} running nodes to the team\n3. Set up sync connections from members to owner\n\nEnter team name (or cancel):`);
+            
             if (!teamName || !teamName.trim()) {
                 return;
             }
 
-            if (confirm(`Quick setup will:\n1. Create team "${teamName}" with ${runningNodes[0].name} as owner\n2. Add all ${runningNodes.length} nodes to the team\n3. Make owner sync peer for all members\n\nProceed?`)) {
-                // Step 1: Create team with first node as owner
-                const ownerNode = runningNodes[0];
-                ws.send(JSON.stringify({
-                    type: 'CreateTeam',
-                    node_id: ownerNode.id,
-                    team_name: teamName.trim()
-                }));
+            // Suppress notifications during setup
+            suppressNotifications = true;
+            
+            // Step 1: Create team with first node as owner
+            const ownerNode = runningNodes[0];
+            ws.send(JSON.stringify({
+                type: 'CreateTeam',
+                node_id: ownerNode.id,
+                team_name: teamName.trim()
+            }));
 
-                // Store the setup for completion after team is created
-                window.pendingQuickSetup = {
-                    teamName: teamName.trim(),
-                    ownerNodeId: ownerNode.id,
-                    allNodes: runningNodes
-                };
-            }
+            // Store the setup for completion after team is created
+            window.pendingQuickSetup = {
+                teamName: teamName.trim(),
+                ownerNodeId: ownerNode.id,
+                allNodes: runningNodes,
+                isQuickSetup: true  // Add flag to identify quick setup
+            };
         }
 
         // Helper function to complete quick setup after team creation
@@ -3372,16 +3549,18 @@ async fn serve_basic_html() -> Html<&'static str> {
 
             // Step 2: Add remaining nodes to team
             const nodesToAdd = setup.allNodes.filter(node => node.id !== setup.ownerNodeId);
-            nodesToAdd.forEach(node => {
-                setTimeout(() => {
-                    ws.send(JSON.stringify({
-                        type: 'JoinTeam',
-                        node_id: node.id,
-                        team_id: teamId,
-                        owner_node_id: setup.ownerNodeId
-                    }));
-                }, 500); // Small delay between requests
-            });
+            if (nodesToAdd.length > 0) {
+                nodesToAdd.forEach(node => {
+                    setTimeout(() => {
+                        ws.send(JSON.stringify({
+                            type: 'JoinTeam',
+                            node_id: node.id,
+                            team_id: teamId,
+                            owner_node_id: setup.ownerNodeId
+                        }));
+                    }, 500); // Small delay between requests
+                });
+            }
 
             // Step 3: Create sync connections (with delay to let joins complete)
             setTimeout(() => {
@@ -3393,11 +3572,17 @@ async fn serve_basic_html() -> Html<&'static str> {
                 // Make owner sync peer for all members
                 setTimeout(() => {
                     syncAllMembersFromOwner();
+                    
+                    // Re-enable notifications and show final success
+                    setTimeout(() => {
+                        suppressNotifications = false;
+                        showNotification(`Team "${setup.teamName}" setup complete with ${setup.allNodes.length} nodes!`, 'success', 'Quick Team Setup');
+                        
+                        // Clear pending setup AFTER everything is done
+                        delete window.pendingQuickSetup;
+                    }, 500);
                 }, 2000); // Wait for joins to complete
             }, 1000);
-
-            // Clear pending setup
-            delete window.pendingQuickSetup;
         }
 
         // Messaging functions
@@ -3449,7 +3634,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             
             const node = nodes.get(contextMenuNode);
             if (!node || !node.teams || node.teams.length === 0) {
-                alert('This node is not part of any team. Join a team first to send messages.');
+                showNotification('This node is not part of any team. Join a team first to send messages.', 'warning');
                 document.getElementById('contextMenu').style.display = 'none';
                 return;
             }
