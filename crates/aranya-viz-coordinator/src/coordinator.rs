@@ -72,183 +72,499 @@ async fn serve_basic_html() -> Html<&'static str> {
 <head>
     <title>Aranya Visualization</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .header { text-align: center; margin-bottom: 20px; }
-        .canvas-container { 
-            border: 2px solid #ccc; 
-            position: relative; 
-            margin: 20px 0; 
-            overflow: hidden;
-            background: #f9f9f9;
-            background-image: 
-                linear-gradient(rgba(0,0,0,.1) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0,0,0,.1) 1px, transparent 1px);
-            background-size: 50px 50px;
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #64748b;
+            --accent-color: #0ea5e9;
+            --success-color: #22c55e;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+            --background-color: #f8fafc;
+            --surface-color: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            --radius-sm: 0.375rem;
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
         }
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0; 
+            padding: 0; 
+            background: var(--background-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        
+        .container { 
+            max-width: 100vw; 
+            margin: 0; 
+            padding: 1rem;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1rem;
+            height: 100vh;
+        }
+        
+        .header { 
+            text-align: center; 
+            padding: 1rem;
+            background: var(--surface-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+        }
+        
+        .header h1 {
+            margin: 0 0 0.5rem 0;
+            color: var(--primary-color);
+            font-size: 1.875rem;
+            font-weight: 700;
+        }
+        
+        .header p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        
+        .main-content {
+            display: grid;
+            grid-template-columns: 320px 1fr 320px;
+            gap: 1rem;
+            flex: 1;
+            min-height: 0;
+        }
+        
+        .canvas-container { 
+            background: var(--surface-color);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .canvas-header {
+            padding: 1rem;
+            background: var(--surface-color);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        
+        .canvas-viewport {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: var(--texture-bg, #f8fafc);
+            background-image: var(--texture-pattern, 
+                linear-gradient(rgba(0,0,0,.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0,0,0,.03) 1px, transparent 1px));
+            background-size: var(--texture-size, 40px 40px);
+        }
+        
         #canvas { 
             display: block; 
             cursor: crosshair; 
             background: transparent;
+            width: 100%;
+            height: 100%;
         }
-        .controls { margin: 20px 0; }
-        .controls button { margin: 5px; padding: 10px 15px; }
-        .status { background: #f5f5f5; padding: 10px; border-radius: 5px; }
-        .node { position: absolute; width: 60px; height: 60px; border-radius: 50%; 
-                background: #4CAF50; border: 3px solid #333; cursor: move; 
-                display: flex; align-items: center; justify-content: center; 
-                color: white; font-weight: bold; }
-        .node.starting { background: #FF9800; }
-        .node.error { background: #F44336; }
-        .node.stopped { background: #9E9E9E; }
+        
+        .controls { 
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .controls button, .btn { 
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            background: var(--surface-color);
+            color: var(--text-primary);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .controls button:hover, .btn:hover {
+            background: var(--background-color);
+            border-color: var(--primary-color);
+            transform: translateY(-1px);
+        }
+        
+        .controls button.active, .btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
+        .status { 
+            background: var(--surface-color);
+            padding: 0.75rem 1rem;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .texture-selector {
+            background: var(--surface-color);
+            border-radius: var(--radius-lg);
+            padding: 1rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            margin-bottom: 1rem;
+        }
+        
+        .texture-selector h4 {
+            margin: 0 0 1rem 0;
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        
+        .texture-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+            gap: 0.5rem;
+        }
+        
+        .texture-option {
+            aspect-ratio: 1;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-size: cover;
+            background-position: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .texture-option:hover {
+            border-color: var(--primary-color);
+            transform: scale(1.05);
+        }
+        
+        .texture-option.selected {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-color);
+        }
+        
+        .texture-option::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--texture-bg, #f8fafc);
+            background-image: var(--texture-pattern);
+            background-size: var(--texture-size, 20px 20px);
+        }
+        .panel {
+            background: var(--surface-color);
+            border-radius: var(--radius-lg);
+            padding: 1rem;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            height: fit-content;
+            max-height: calc(100vh - 8rem);
+            overflow-y: auto;
+        }
+        
+        .panel h3 {
+            margin: 0 0 1rem 0;
+            color: var(--text-primary);
+            font-size: 1.125rem;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 0.5rem;
+        }
+        
+        .panel h4 {
+            margin: 1.5rem 0 0.75rem 0;
+            color: var(--text-primary);
+            font-size: 1rem;
+            font-weight: 600;
+        }
+        
+        .panel h4:first-child {
+            margin-top: 0;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+        
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-size: 0.875rem;
+            transition: border-color 0.2s ease;
+            background: var(--surface-color);
+            color: var(--text-primary);
+        }
+        
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .btn-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .btn-full {
+            grid-column: 1 / -1;
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
+        .btn-primary:hover {
+            background: #1d4ed8;
+            border-color: #1d4ed8;
+        }
+        
+        .btn-success {
+            background: var(--success-color);
+            color: white;
+            border-color: var(--success-color);
+        }
+        
+        .btn-success:hover {
+            background: #16a34a;
+            border-color: #16a34a;
+        }
+        
+        .btn-warning {
+            background: var(--warning-color);
+            color: white;
+            border-color: var(--warning-color);
+        }
+        
+        .btn-warning:hover {
+            background: #d97706;
+            border-color: #d97706;
+        }
+        
+        .btn-purple {
+            background: #9333ea;
+            color: white;
+            border-color: #9333ea;
+        }
+        
+        .btn-purple:hover {
+            background: #7c2d12;
+            border-color: #7c2d12;
+        }
         .context-menu {
             position: absolute;
-            background: white;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            padding: 0;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 0.5rem 0;
             display: none;
             z-index: 1000;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            box-shadow: var(--shadow-lg);
+            min-width: 180px;
         }
+        
         .context-menu-item {
-            padding: 10px 20px;
+            padding: 0.75rem 1rem;
             cursor: pointer;
-            border-bottom: 1px solid #eee;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            transition: background-color 0.2s ease;
         }
-        .context-menu-item:last-child {
-            border-bottom: none;
-        }
+        
         .context-menu-item:hover {
-            background: #f5f5f5;
+            background: var(--background-color);
         }
         .message-bubble {
             position: absolute;
-            background: #2196F3;
+            background: var(--primary-color);
             color: white;
-            padding: 10px 15px;
-            border-radius: 18px;
-            font-size: 13px;
+            padding: 0.75rem 1rem;
+            border-radius: 1rem;
+            font-size: 0.8125rem;
             font-weight: 500;
-            max-width: 250px;
+            max-width: 280px;
             word-wrap: break-word;
             pointer-events: none;
             opacity: 0;
             transform: translateY(-10px) scale(0.8);
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             z-index: 1001;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-            border: 2px solid rgba(255,255,255,0.3);
+            box-shadow: var(--shadow-lg);
+            border: 1px solid rgba(255,255,255,0.2);
         }
+        
         .message-bubble.show {
             opacity: 1;
             transform: translateY(-50px) scale(1);
         }
+        
         .message-bubble::after {
             content: '';
             position: absolute;
-            bottom: -8px;
+            bottom: -6px;
             left: 50%;
             transform: translateX(-50%);
             width: 0;
             height: 0;
-            border-left: 8px solid transparent;
-            border-right: 8px solid transparent;
-            border-top: 8px solid #2196F3;
-        }
-        .message-panel {
-            position: absolute;
-            left: 20px;
-            top: 20px;
-            width: 300px;
-            background: white;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            padding: 15px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .message-input {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            resize: vertical;
-            min-height: 60px;
-        }
-        .message-send-btn {
-            margin-top: 10px;
-            padding: 8px 15px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .message-send-btn:hover {
-            background: #45a049;
-        }
-        .message-send-btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-        .tool-selector {
-            margin: 10px 0;
-            padding: 10px;
-            background: #f5f5f5;
-            border-radius: 5px;
-        }
-        .tool-button {
-            margin: 5px;
-            padding: 8px 15px;
-            border: 2px solid #ccc;
-            background: white;
-            cursor: pointer;
-            border-radius: 5px;
-        }
-        .tool-button.active {
-            background: #4CAF50;
-            color: white;
-            border-color: #4CAF50;
-        }
-        .connection-preview {
-            stroke: #666;
-            stroke-width: 2;
-            stroke-dasharray: 5,5;
-            fill: none;
-        }
-        .teams-panel {
-            position: absolute;
-            right: 20px;
-            top: 20px;
-            width: 300px;
-            background: white;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            padding: 15px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .team-section {
-            margin-bottom: 20px;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid var(--primary-color);
         }
         .team-item {
-            padding: 8px;
-            margin: 5px 0;
-            background: #f5f5f5;
-            border-radius: 4px;
+            padding: 0.75rem;
+            margin: 0.5rem 0;
+            background: var(--background-color);
+            border-radius: var(--radius-md);
             cursor: pointer;
+            border: 1px solid var(--border-color);
+            transition: all 0.2s ease;
         }
+        
+        .team-item:hover {
+            border-color: var(--primary-color);
+            background: #eff6ff;
+        }
+        
         .team-item.selected {
-            background: #e3f2fd;
-            border: 1px solid #2196F3;
+            background: #eff6ff;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 1px var(--primary-color);
         }
+        
         .team-members {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
         }
+        
         .no-team-selected {
-            color: #999;
+            color: var(--text-secondary);
             font-style: italic;
+            font-size: 0.875rem;
+        }
+        
+        .message-history {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 0.75rem;
+            background: var(--background-color);
+        }
+        
+        .message-item {
+            margin-bottom: 0.75rem;
+            padding: 0.5rem;
+            background: var(--surface-color);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+        }
+        
+        .message-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .message-author {
+            font-weight: 600;
+            color: var(--primary-color);
+            font-size: 0.875rem;
+        }
+        
+        .message-time {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+        }
+        
+        .message-text {
+            color: var(--text-primary);
+            margin-top: 0.25rem;
+            font-size: 0.875rem;
+        }
+        
+        .role-legend {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: var(--background-color);
+            border-radius: var(--radius-md);
+            border: 1px solid var(--border-color);
+        }
+        
+        .role-legend strong {
+            color: var(--text-primary);
+            font-size: 0.8125rem;
+        }
+        
+        .role-color {
+            font-weight: 600;
+        }
+        
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 280px 1fr 280px;
+            }
+        }
+        
+        @media (max-width: 1024px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr auto;
+            }
+            
+            .panel {
+                max-height: 300px;
+            }
         }
     </style>
 </head>
@@ -259,23 +575,133 @@ async fn serve_basic_html() -> Html<&'static str> {
             <p>Click to place nodes. Drag to move them. Pan by dragging empty space. Zoom with mouse wheel. Right-click for options.</p>
         </div>
         
-        <div class="controls">
-            <button onclick="clearAll()">Clear All</button>
-            <button onclick="toggleConnections()">Toggle Connections</button>
-            <button onclick="resetView()">Reset View</button>
-            <span style="margin-left: 15px; color: #666;">Zoom: <span id="zoomLevel">100%</span></span>
-            <input type="text" id="nodeNameInput" placeholder="Node name..." value="" style="margin-left: 15px;">
-        </div>
-        
-        <div class="tool-selector">
-            <span>Tool: </span>
-            <button class="tool-button active" onclick="selectTool('select')" id="selectTool">Select/Move</button>
-            <button class="tool-button" onclick="selectTool('place')" id="placeTool">Place Node</button>
-            <button class="tool-button" onclick="selectTool('connect')" id="connectTool">Connect Nodes</button>
-        </div>
-        
-        <div class="canvas-container">
-            <canvas id="canvas" width="1000" height="600"></canvas>
+        <div class="main-content">
+            <div class="panel">
+                <div class="texture-selector">
+                    <h4>🎨 Background Themes</h4>
+                    <div class="texture-grid">
+                        <div class="texture-option selected" data-theme="default" title="Default Grid"></div>
+                        <div class="texture-option" data-theme="dark" title="Dark Theme"></div>
+                        <div class="texture-option" data-theme="blueprint" title="Blueprint"></div>
+                        <div class="texture-option" data-theme="organic" title="Organic"></div>
+                    </div>
+                </div>
+                
+                <h3>📤 Send Message</h3>
+                <div class="form-group">
+                    <label for="messageSenderSelector">Sender Node:</label>
+                    <select id="messageSenderSelector">
+                        <option value="">-- Select Sender Node --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="messageTeamSelector">Team:</label>
+                    <select id="messageTeamSelector">
+                        <option value="">-- Select Team --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="messageInput">Message:</label>
+                    <textarea id="messageInput" placeholder="Type your message here..."></textarea>
+                </div>
+                <button class="btn btn-primary btn-full" onclick="sendBroadcastMessage()" id="sendMessageBtn" disabled>
+                    Send Message
+                </button>
+                
+                <h4>📜 Recent Messages</h4>
+                <div id="recentMessages" class="message-history">
+                    <p style="color: var(--text-secondary); font-style: italic; text-align: center; margin: 1rem 0;">No messages yet</p>
+                </div>
+            </div>
+            
+            <div class="canvas-container">
+                <div class="canvas-header">
+                    <div class="controls">
+                        <button onclick="selectTool('select')" id="selectTool" class="btn active">✋ Select/Move</button>
+                        <button onclick="selectTool('place')" id="placeTool" class="btn">➕ Place Node</button>
+                        <button onclick="selectTool('connect')" id="connectTool" class="btn">🔗 Connect</button>
+                        <input type="text" id="nodeNameInput" placeholder="Node name..." value="" style="max-width: 150px;">
+                    </div>
+                    <div class="controls">
+                        <button onclick="clearAll()" class="btn">🗑️ Clear All</button>
+                        <button onclick="toggleConnections()" class="btn">👁️ Connections</button>
+                        <button onclick="resetView()" class="btn">🔄 Reset View</button>
+                        <span style="color: var(--text-secondary); font-size: 0.875rem;">Zoom: <span id="zoomLevel">100%</span></span>
+                    </div>
+                </div>
+                <div class="canvas-viewport">
+                    <canvas id="canvas"></canvas>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h3>🏢 Team Management</h3>
+                
+                <h4>Create Team</h4>
+                <div class="form-group">
+                    <label for="teamNameInput">Team Name:</label>
+                    <input type="text" id="teamNameInput" placeholder="Enter team name...">
+                </div>
+                <div class="btn-grid">
+                    <select id="nodeSelector" class="form-group">
+                        <option value="">-- Select Node --</option>
+                    </select>
+                    <button onclick="createTeamFromUI()" class="btn btn-primary">Create Team</button>
+                </div>
+                
+                <h4>Join Team</h4>
+                <div class="btn-grid">
+                    <select id="joinNodeSelector" class="form-group">
+                        <option value="">-- Select Node --</option>
+                    </select>
+                    <button onclick="joinTeamFromUI()" class="btn btn-primary">Join Team</button>
+                </div>
+                <div class="form-group">
+                    <select id="availableTeamsSelector">
+                        <option value="">-- Select Team to Join --</option>
+                    </select>
+                </div>
+                
+                <h4>Team Operations</h4>
+                <div class="form-group">
+                    <label for="teamSelector">Active Team:</label>
+                    <select id="teamSelector" onchange="selectTeam()">
+                        <option value="">-- Select Team for Operations --</option>
+                    </select>
+                </div>
+                <p class="no-team-selected" id="selectedTeamInfo">No team selected for sync operations</p>
+                
+                <div class="btn-grid">
+                    <button onclick="addAllNodesToSelectedTeam()" class="btn btn-success btn-full">
+                        Add All Nodes to Team
+                    </button>
+                    <button onclick="autoSyncTeamMembers()" class="btn btn-primary">
+                        Auto-Sync All
+                    </button>
+                    <button onclick="syncAllMembersFromOwner()" class="btn btn-purple">
+                        Owner Sync
+                    </button>
+                    <button onclick="quickTeamSetup()" class="btn btn-warning btn-full">
+                        Quick Team Setup
+                    </button>
+                </div>
+                
+                <div class="role-legend">
+                    <strong>Role Colors:</strong><br>
+                    • <span class="role-color" style="color: #FF5722;">Red</span>: Owner<br>
+                    • <span class="role-color" style="color: #FF9800;">Orange</span>: Admin<br>
+                    • <span class="role-color" style="color: #9C27B0;">Purple</span>: Operator<br>
+                    • <span class="role-color" style="color: #2196F3;">Blue</span>: Member<br>
+                    <br>
+                    <strong>Sync Types:</strong><br>
+                    • <span style="color: var(--primary-color);">Auto-Sync</span>: Full mesh<br>
+                    • <span style="color: #9C27B0;">Owner Sync</span>: Owner → Members<br>
+                    <em>Arrows show data flow direction</em>
+                </div>
+                
+                <h4>All Teams</h4>
+                <div id="teamsList"></div>
+            </div>
         </div>
         
         <div class="status" id="status">
@@ -392,12 +818,124 @@ async fn serve_basic_html() -> Html<&'static str> {
     </div>
 
     <script>
+        // Texture pack system
+        const texturePacks = {
+            default: {
+                name: 'Default Grid',
+                bg: '#f8fafc',
+                pattern: 'linear-gradient(rgba(0,0,0,.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.03) 1px, transparent 1px)',
+                size: '40px 40px',
+                nodeIcons: '🔵'
+            },
+            dark: {
+                name: 'Dark Theme',
+                bg: '#1a1a1a',
+                pattern: 'linear-gradient(rgba(255,255,255,.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.1) 1px, transparent 1px)',
+                size: '40px 40px',
+                nodeIcons: '⚫'
+            },
+            blueprint: {
+                name: 'Blueprint',
+                bg: '#1e3a8a',
+                pattern: 'linear-gradient(rgba(255,255,255,.2) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.2) 1px, transparent 1px)',
+                size: '30px 30px',
+                nodeIcons: '🔷'
+            },
+            organic: {
+                name: 'Organic',
+                bg: '#065f46',
+                pattern: 'radial-gradient(circle at 20px 20px, rgba(255,255,255,.1) 1px, transparent 1px)',
+                size: '40px 40px',
+                nodeIcons: '🟢'
+            }
+        };
+        
+        let currentTexturePack = 'default';
+        
+        function initializeTexturePacks() {
+            const textureOptions = document.querySelectorAll('.texture-option');
+            
+            textureOptions.forEach((option, index) => {
+                const theme = option.dataset.theme;
+                const pack = texturePacks[theme];
+                
+                if (pack) {
+                    option.style.setProperty('--texture-bg', pack.bg);
+                    option.style.setProperty('--texture-pattern', pack.pattern);
+                    option.style.setProperty('--texture-size', pack.size);
+                    
+                    option.addEventListener('click', () => {
+                        setTexturePack(theme);
+                    });
+                }
+            });
+        }
+        
+        function setTexturePack(packName) {
+            if (!texturePacks[packName]) return;
+            
+            currentTexturePack = packName;
+            const pack = texturePacks[packName];
+            
+            // Update selected state
+            document.querySelectorAll('.texture-option').forEach(option => {
+                option.classList.remove('selected');
+                if (option.dataset.theme === packName) {
+                    option.classList.add('selected');
+                }
+            });
+            
+            // Apply theme to canvas viewport
+            const viewport = document.querySelector('.canvas-viewport');
+            viewport.style.setProperty('--texture-bg', pack.bg);
+            viewport.style.setProperty('--texture-pattern', pack.pattern);
+            viewport.style.setProperty('--texture-size', pack.size);
+            
+            // Update CSS variables for dark theme
+            if (packName === 'dark') {
+                document.documentElement.style.setProperty('--surface-color', '#2d3748');
+                document.documentElement.style.setProperty('--text-primary', '#f7fafc');
+                document.documentElement.style.setProperty('--text-secondary', '#a0aec0');
+                document.documentElement.style.setProperty('--border-color', '#4a5568');
+                document.documentElement.style.setProperty('--background-color', '#1a1a1a');
+            } else {
+                document.documentElement.style.setProperty('--surface-color', '#ffffff');
+                document.documentElement.style.setProperty('--text-primary', '#1e293b');
+                document.documentElement.style.setProperty('--text-secondary', '#64748b');
+                document.documentElement.style.setProperty('--border-color', '#e2e8f0');
+                document.documentElement.style.setProperty('--background-color', '#f8fafc');
+            }
+            
+            draw();
+        }
         let ws = null;
         let nodes = new Map();
         let connections = new Map();
         let teams = new Map();
         let canvas = document.getElementById('canvas');
         let ctx = canvas.getContext('2d');
+        
+        // Initialize canvas size
+        function initializeCanvas() {
+            const viewport = document.querySelector('.canvas-viewport');
+            const rect = viewport.getBoundingClientRect();
+            
+            // Set canvas size to match viewport
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            
+            // Center the viewport initially if this is first initialization
+            if (viewportX === 0 && viewportY === 0) {
+                viewportX = (canvas.width - CANVAS_WIDTH * viewportScale) / 2;
+                viewportY = (canvas.height - CANVAS_HEIGHT * viewportScale) / 2;
+            }
+            
+            // Redraw after resize
+            draw();
+        }
+        
+        // Handle window resize
+        window.addEventListener('resize', initializeCanvas);
         let dragNode = null;
         let showConnections = true;
         let contextMenuNode = null;
@@ -709,11 +1247,25 @@ async fn serve_basic_html() -> Html<&'static str> {
                 ctx.stroke();
             }
             
-            // Draw name
-            ctx.fillStyle = 'white';
-            ctx.font = '12px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(node.name, x, y + 4);
+            // Draw node icon or name based on texture pack
+            const pack = texturePacks[currentTexturePack];
+            if (pack.nodeIcons && pack.nodeIcons !== '🔵') {
+                // Draw icon
+                ctx.font = '24px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(pack.nodeIcons, x, y + 8);
+                
+                // Draw name below
+                ctx.fillStyle = currentTexturePack === 'dark' ? 'white' : '#333';
+                ctx.font = '10px Arial';
+                ctx.fillText(node.name, x, y + 45);
+            } else {
+                // Draw name in center
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(node.name, x, y + 4);
+            }
         }
 
         function drawArrow(fromNode, toNode, color = '#666') {
@@ -786,14 +1338,18 @@ async fn serve_basic_html() -> Html<&'static str> {
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
             
+            console.log(`Canvas click: screen(${x}, ${y}), canvas size(${canvas.width}, ${canvas.height}), viewport(${viewportX}, ${viewportY}), scale(${viewportScale})`);
+            
             const nodeId = getNodeAt(x, y);
             
             if (currentTool === 'place') {
                 if (!nodeId) {
                     const worldPos = screenToWorld(x, y);
+                    console.log(`World position: (${worldPos.x}, ${worldPos.y})`);
                     // Clamp to virtual canvas bounds
                     const clampedX = Math.max(50, Math.min(CANVAS_WIDTH - 50, worldPos.x));
                     const clampedY = Math.max(50, Math.min(CANVAS_HEIGHT - 50, worldPos.y));
+                    console.log(`Clamped position: (${clampedX}, ${clampedY})`);
                     
                     const nameInput = document.getElementById('nodeNameInput');
                     const name = nameInput.value.trim() || `Node${nodes.size + 1}`;
@@ -1031,7 +1587,13 @@ async fn serve_basic_html() -> Html<&'static str> {
 
         function selectTool(tool) {
             currentTool = tool;
-            connectStart = null; // Reset connection state
+            connectStart = null;
+            
+            // Update active button states
+            document.querySelectorAll('.controls .btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.getElementById(tool + 'Tool').classList.add('active'); // Reset connection state
             
             // Update button states
             document.querySelectorAll('.tool-button').forEach(btn => {
@@ -1679,7 +2241,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             const container = document.getElementById('recentMessages');
             
             if (recentMessages.length === 0) {
-                container.innerHTML = '<p style="color: #999; font-style: italic;">No messages yet</p>';
+                container.innerHTML = '<p style="color: var(--text-secondary); font-style: italic; text-align: center; margin: 1rem 0;">No messages yet</p>';
                 return;
             }
             
@@ -1691,9 +2253,9 @@ async fn serve_basic_html() -> Html<&'static str> {
                     msg.author_name : 
                     msg.author_id.substring(0, 8) + '...';
                 html += `
-                    <div style="margin-bottom: 8px; padding: 6px; background: #f9f9f9; border-radius: 4px;">
-                        <div style="font-weight: bold; color: #333;">${authorDisplay} (${time})</div>
-                        <div style="color: #666; margin-top: 2px;">${msg.text}</div>
+                    <div class="message-item">
+                        <div class="message-author">${authorDisplay} <span class="message-time">${time}</span></div>
+                        <div class="message-text">${msg.text}</div>
                     </div>
                 `;
             });
@@ -1777,6 +2339,8 @@ async fn serve_basic_html() -> Html<&'static str> {
         });
 
         // Initialize
+        initializeCanvas();
+        initializeTexturePacks();
         connectWebSocket();
     </script>
 </body>
