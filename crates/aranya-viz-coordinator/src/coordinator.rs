@@ -372,6 +372,12 @@ async fn serve_basic_html() -> Html<&'static str> {
                 </button>
             </div>
             <div style="font-size: 11px; color: #666; margin-top: 10px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
+                <strong>Node Role Outlines:</strong><br>
+                • <span style="color: #FF5722; font-weight: bold;">Red</span>: Owner<br>
+                • <span style="color: #FF9800; font-weight: bold;">Orange</span>: Admin<br>
+                • <span style="color: #9C27B0; font-weight: bold;">Purple</span>: Operator<br>
+                • <span style="color: #2196F3; font-weight: bold;">Blue</span>: Member<br>
+                <br>
                 <strong>Sync Types:</strong><br>
                 • <span style="color: #2196F3;">Auto-Sync All</span>: Full mesh (bidirectional)<br>
                 • <span style="color: #9C27B0;">Owner Sync Peer</span>: Owner → Members (command flow)<br>
@@ -608,7 +614,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                         const color = conn.status === 'Connected' ? '#4CAF50' : 
                                      conn.status === 'Failed' ? '#F44336' : '#FF9800';
                         // Draw arrow from source (to) to syncer (from) to show data flow direction
-                        drawArrow(toNode.position, fromNode.position, color);
+                        drawArrow(toNode, fromNode, color);
                     }
                 });
             }
@@ -649,40 +655,41 @@ async fn serve_basic_html() -> Html<&'static str> {
             else if (node.status === 'Starting') color = '#FF9800';
             else if (typeof node.status === 'object' && node.status.Error) color = '#F44336';
             
+            // Draw main node circle
             ctx.fillStyle = color;
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 3;
-            
             ctx.beginPath();
             ctx.arc(x, y, radius, 0, 2 * Math.PI);
             ctx.fill();
-            ctx.stroke();
             
-            // Draw team indicators (small colored dots around the node)
+            // Draw role-based outlines
             if (node.teams && node.teams.length > 0) {
-                const dotRadius = 4;
-                const dotDistance = radius + 8;
-                node.teams.forEach((team, index) => {
-                    const angle = (index / node.teams.length) * 2 * Math.PI;
-                    const dotX = x + Math.cos(angle) * dotDistance;
-                    const dotY = y + Math.sin(angle) * dotDistance;
-                    
+                // Sort teams by role priority for consistent layering
+                const sortedTeams = [...node.teams].sort((a, b) => {
+                    const roleOrder = { 'Owner': 0, 'Admin': 1, 'Operator': 2, 'Member': 3 };
+                    return roleOrder[a.role] - roleOrder[b.role];
+                });
+                
+                sortedTeams.forEach((team, index) => {
                     // Use different colors for different roles
                     let teamColor = '#2196F3'; // Member
                     if (team.role === 'Owner') teamColor = '#FF5722';
                     else if (team.role === 'Admin') teamColor = '#FF9800';
                     else if (team.role === 'Operator') teamColor = '#9C27B0';
                     
-                    ctx.fillStyle = teamColor;
+                    // Draw outline ring - each role gets its own ring
+                    ctx.strokeStyle = teamColor;
+                    ctx.lineWidth = 4;
                     ctx.beginPath();
-                    ctx.arc(dotX, dotY, dotRadius, 0, 2 * Math.PI);
-                    ctx.fill();
-                    
-                    // Add white border
-                    ctx.strokeStyle = 'white';
-                    ctx.lineWidth = 1;
+                    ctx.arc(x, y, radius + 2 + (index * 5), 0, 2 * Math.PI);
                     ctx.stroke();
                 });
+            } else {
+                // Default outline for nodes without teams
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, 2 * Math.PI);
+                ctx.stroke();
             }
             
             // Draw name
@@ -692,19 +699,25 @@ async fn serve_basic_html() -> Html<&'static str> {
             ctx.fillText(node.name, x, y + 4);
         }
 
-        function drawArrow(from, to, color = '#666') {
+        function drawArrow(fromNode, toNode, color = '#666') {
             const headlen = 10;
-            const dx = to.x - from.x;
-            const dy = to.y - from.y;
+            const dx = toNode.position.x - fromNode.position.x;
+            const dy = toNode.position.y - fromNode.position.y;
             const angle = Math.atan2(dy, dx);
             
-            // Adjust start and end points to node edges
-            const nodeRadius = 30;
+            // Calculate radius including outline rings
+            const baseRadius = 30;
+            const fromRadius = baseRadius + (fromNode.teams && fromNode.teams.length > 0 ? 
+                2 + (fromNode.teams.length - 1) * 5 + 4 : 0);
+            const toRadius = baseRadius + (toNode.teams && toNode.teams.length > 0 ? 
+                2 + (toNode.teams.length - 1) * 5 + 4 : 0);
+            
+            // Adjust start and end points to node edges (including outlines)
             const dist = Math.sqrt(dx * dx + dy * dy);
-            const startX = from.x + (nodeRadius * dx) / dist;
-            const startY = from.y + (nodeRadius * dy) / dist;
-            const endX = to.x - (nodeRadius * dx) / dist;
-            const endY = to.y - (nodeRadius * dy) / dist;
+            const startX = fromNode.position.x + (fromRadius * dx) / dist;
+            const startY = fromNode.position.y + (fromRadius * dy) / dist;
+            const endX = toNode.position.x - (toRadius * dx) / dist;
+            const endY = toNode.position.y - (toRadius * dy) / dist;
             
             ctx.strokeStyle = color;
             ctx.lineWidth = 2;
@@ -742,7 +755,9 @@ async fn serve_basic_html() -> Html<&'static str> {
             for (let [id, node] of nodes) {
                 const dx = worldPos.x - node.position.x;
                 const dy = worldPos.y - node.position.y;
-                if (dx * dx + dy * dy <= 30 * 30) {
+                // Account for larger hit area due to role outline rings
+                const maxRadius = 30 + (node.teams ? Math.max(0, (node.teams.length - 1) * 5) + 6 : 0);
+                if (dx * dx + dy * dy <= maxRadius * maxRadius) {
                     return id;
                 }
             }
