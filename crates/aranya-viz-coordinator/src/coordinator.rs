@@ -1319,13 +1319,18 @@ async fn serve_basic_html() -> Html<&'static str> {
             };
         }
         
-        function getNodeAt(x, y) {
-            const worldPos = screenToWorld(x, y);
+        function getNodeAt(screenX, screenY) {
             for (let [id, node] of nodes) {
-                const dx = worldPos.x - node.position.x;
-                const dy = worldPos.y - node.position.y;
-                // Account for larger hit area due to role outline rings
-                const maxRadius = 30 + (node.teams ? Math.max(0, (node.teams.length - 1) * 5) + 6 : 0);
+                // Convert node world position to screen position
+                const screenPos = worldToScreen(node.position.x, node.position.y);
+                const dx = screenX - screenPos.x;
+                const dy = screenY - screenPos.y;
+                
+                // Account for larger hit area due to role outline rings, scaled by viewport scale
+                const baseRadius = 30 * viewportScale;
+                const ringOffset = (node.teams ? Math.max(0, (node.teams.length - 1) * 5) + 6 : 0) * viewportScale;
+                const maxRadius = baseRadius + ringOffset;
+                
                 if (dx * dx + dy * dy <= maxRadius * maxRadius) {
                     return id;
                 }
@@ -1341,6 +1346,9 @@ async fn serve_basic_html() -> Html<&'static str> {
             console.log(`Canvas click: screen(${x}, ${y}), canvas size(${canvas.width}, ${canvas.height}), viewport(${viewportX}, ${viewportY}), scale(${viewportScale})`);
             
             const nodeId = getNodeAt(x, y);
+            if (nodeId) {
+                console.log(`Hit node: ${nodeId}`);
+            }
             
             if (currentTool === 'place') {
                 if (!nodeId) {
