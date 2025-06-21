@@ -543,6 +543,141 @@ async fn serve_basic_html() -> Html<&'static str> {
             display: none;
         }
         
+        .texture-pack-management {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+        }
+        
+        .texture-pack-management h5 {
+            margin: 0 0 1rem 0;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        
+        .texture-pack-management h6 {
+            margin: 1rem 0 0.5rem 0;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .pack-name-input {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: var(--surface-color);
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+        
+        .pack-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin: 1rem 0;
+        }
+        
+        .pack-actions .btn {
+            flex: 1;
+            padding: 0.5rem;
+            font-size: 0.75rem;
+        }
+        
+        .saved-packs-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: var(--surface-color);
+        }
+        
+        .saved-pack-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s ease;
+        }
+        
+        .saved-pack-item:last-child {
+            border-bottom: none;
+        }
+        
+        .saved-pack-item:hover {
+            background: var(--background-color);
+        }
+        
+        .saved-pack-item.active {
+            background: #eff6ff;
+            border-color: var(--primary-color);
+        }
+        
+        .pack-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .pack-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .pack-details {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+        
+        .pack-actions-buttons {
+            display: flex;
+            gap: 0.25rem;
+        }
+        
+        .pack-action-btn {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.7rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: var(--surface-color);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .pack-action-btn:hover {
+            background: var(--background-color);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        
+        .pack-action-btn.load {
+            background: var(--accent-color);
+            color: white;
+            border-color: var(--accent-color);
+        }
+        
+        .pack-action-btn.load:hover {
+            background: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .pack-action-btn.delete {
+            background: var(--error-color);
+            color: white;
+            border-color: var(--error-color);
+        }
+        
+        .pack-action-btn.delete:hover {
+            background: #dc2626;
+            border-color: #dc2626;
+        }
+        
         .custom-texture-actions {
             margin-top: 1rem;
             display: flex;
@@ -892,9 +1027,27 @@ async fn serve_basic_html() -> Html<&'static str> {
                             <div id="individualNodeIcons" class="individual-icons"></div>
                         </div>
                         
-                        <div class="custom-texture-actions">
-                            <button id="saveCustomTexture" class="btn btn-primary">Save Custom Pack</button>
-                            <button id="resetCustomTexture" class="btn btn-secondary">Reset</button>
+                        <div class="texture-pack-management">
+                            <h5>💾 Texture Pack Management</h5>
+                            
+                            <div class="form-group">
+                                <label for="texturePackName">Pack Name:</label>
+                                <input type="text" id="texturePackName" placeholder="My Custom Pack" class="pack-name-input">
+                            </div>
+                            
+                            <div class="pack-actions">
+                                <button id="saveAsTexturePack" class="btn btn-primary">💾 Save As New Pack</button>
+                                <button id="saveCurrentTexturePack" class="btn btn-success">💾 Update Current Pack</button>
+                            </div>
+                            
+                            <div class="saved-packs-section">
+                                <h6>📁 Saved Texture Packs</h6>
+                                <div id="savedTexturePacksList" class="saved-packs-list"></div>
+                            </div>
+                            
+                            <div class="custom-texture-actions">
+                                <button id="resetCustomTexture" class="btn btn-secondary">🔄 Reset to Defaults</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1176,9 +1329,13 @@ async fn serve_basic_html() -> Html<&'static str> {
         
         // Custom texture pack management
         let customBackgroundImage = null;
+        let currentCustomPackId = null; // Track which saved pack is currently loaded
         
         // Image cache for node icons
         const nodeImageCache = new Map(); // imageData -> HTMLImageElement
+        
+        // Saved texture packs storage
+        const savedTexturePacks = new Map(); // packId -> pack data
         
         let currentTexturePack = 'default';
         
@@ -1256,8 +1413,9 @@ async fn serve_basic_html() -> Html<&'static str> {
                 }
             });
             
-            // Save and reset buttons
-            document.getElementById('saveCustomTexture').addEventListener('click', saveCustomTexturePack);
+            // Texture pack management buttons
+            document.getElementById('saveAsTexturePack').addEventListener('click', saveAsNewTexturePack);
+            document.getElementById('saveCurrentTexturePack').addEventListener('click', updateCurrentTexturePack);
             document.getElementById('resetCustomTexture').addEventListener('click', resetCustomTexturePack);
             
             // Toggle button for node icons section
@@ -1519,7 +1677,8 @@ async fn serve_basic_html() -> Html<&'static str> {
         }
         
         function saveCustomTexturePack() {
-            // Save to localStorage for persistence
+            // Legacy function - now redirects to new system
+            // Save to localStorage for backward compatibility
             const customPack = {
                 backgroundImage: texturePacks.custom.backgroundImage,
                 backgroundOpacity: texturePacks.custom.backgroundOpacity,
@@ -1531,26 +1690,8 @@ async fn serve_basic_html() -> Html<&'static str> {
             
             localStorage.setItem('aranya-custom-texture-pack', JSON.stringify(customPack));
             
-            // Also save current texture pack selection and other preferences
-            const preferences = {
-                currentTexturePack: currentTexturePack,
-                showConnections: showConnections,
-                viewportX: viewportX,
-                viewportY: viewportY,
-                viewportScale: viewportScale
-            };
-            
-            localStorage.setItem('aranya-preferences', JSON.stringify(preferences));
-            
-            // Show confirmation
-            const button = document.getElementById('saveCustomTexture');
-            const originalText = button.textContent;
-            button.textContent = 'Saved!';
-            button.style.background = 'var(--success-color)';
-            setTimeout(() => {
-                button.textContent = originalText;
-                button.style.background = '';
-            }, 2000);
+            // Also save preferences
+            savePreferences();
         }
         
         function loadCustomTexturePack() {
@@ -1621,6 +1762,235 @@ async fn serve_basic_html() -> Html<&'static str> {
             preferenceSaveTimeout = setTimeout(savePreferences, 1000); // Save 1 second after last change
         }
         
+        // Texture Pack Management Functions
+        function saveAsNewTexturePack() {
+            const packName = document.getElementById('texturePackName').value.trim();
+            if (!packName) {
+                alert('Please enter a name for your texture pack');
+                return;
+            }
+            
+            const packId = 'pack_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            const packData = {
+                id: packId,
+                name: packName,
+                created: new Date().toISOString(),
+                backgroundImage: texturePacks.custom.backgroundImage,
+                backgroundOpacity: texturePacks.custom.backgroundOpacity,
+                backgroundTheme: texturePacks.custom.backgroundTheme,
+                nodeIcons: texturePacks.custom.nodeIcons,
+                customNodeIcons: Array.from(texturePacks.custom.customNodeIcons.entries()),
+                customNodeImages: Array.from(texturePacks.custom.customNodeImages.entries())
+            };
+            
+            savedTexturePacks.set(packId, packData);
+            currentCustomPackId = packId;
+            saveAllTexturePacks();
+            updateSavedPacksList();
+            
+            // Clear pack name input
+            document.getElementById('texturePackName').value = '';
+            
+            // Show success message
+            showTexturePackMessage('Texture pack saved successfully!', 'success');
+        }
+        
+        function updateCurrentTexturePack() {
+            if (!currentCustomPackId) {
+                alert('No texture pack is currently loaded. Use "Save As New Pack" instead.');
+                return;
+            }
+            
+            const packData = savedTexturePacks.get(currentCustomPackId);
+            if (!packData) {
+                alert('Current texture pack not found. Use "Save As New Pack" instead.');
+                return;
+            }
+            
+            // Update the existing pack
+            packData.backgroundImage = texturePacks.custom.backgroundImage;
+            packData.backgroundOpacity = texturePacks.custom.backgroundOpacity;
+            packData.backgroundTheme = texturePacks.custom.backgroundTheme;
+            packData.nodeIcons = texturePacks.custom.nodeIcons;
+            packData.customNodeIcons = Array.from(texturePacks.custom.customNodeIcons.entries());
+            packData.customNodeImages = Array.from(texturePacks.custom.customNodeImages.entries());
+            packData.modified = new Date().toISOString();
+            
+            savedTexturePacks.set(currentCustomPackId, packData);
+            saveAllTexturePacks();
+            updateSavedPacksList();
+            
+            showTexturePackMessage('Texture pack updated successfully!', 'success');
+        }
+        
+        function loadTexturePack(packId) {
+            const packData = savedTexturePacks.get(packId);
+            if (!packData) {
+                alert('Texture pack not found');
+                return;
+            }
+            
+            // Load pack data into current custom texture pack
+            texturePacks.custom.backgroundImage = packData.backgroundImage;
+            texturePacks.custom.backgroundOpacity = packData.backgroundOpacity || 80;
+            texturePacks.custom.backgroundTheme = packData.backgroundTheme || 'light';
+            texturePacks.custom.nodeIcons = packData.nodeIcons || '🔵';
+            texturePacks.custom.customNodeIcons = new Map(packData.customNodeIcons || []);
+            texturePacks.custom.customNodeImages = new Map(packData.customNodeImages || []);
+            
+            currentCustomPackId = packId;
+            customBackgroundImage = packData.backgroundImage;
+            
+            // Update UI
+            document.getElementById('backgroundTheme').value = texturePacks.custom.backgroundTheme;
+            document.getElementById('backgroundOpacity').value = texturePacks.custom.backgroundOpacity;
+            document.getElementById('opacityValue').textContent = texturePacks.custom.backgroundOpacity + '%';
+            document.getElementById('defaultNodeIcon').value = texturePacks.custom.nodeIcons;
+            document.getElementById('texturePackName').value = packData.name;
+            
+            // Switch to custom texture pack and apply
+            setTexturePack('custom');
+            updateIndividualNodeIcons();
+            updateSavedPacksList();
+            
+            showTexturePackMessage(`Loaded "${packData.name}" texture pack`, 'success');
+        }
+        
+        function deleteTexturePack(packId) {
+            const packData = savedTexturePacks.get(packId);
+            if (!packData) return;
+            
+            if (confirm(`Are you sure you want to delete "${packData.name}"?`)) {
+                savedTexturePacks.delete(packId);
+                
+                // If this was the current pack, clear the reference
+                if (currentCustomPackId === packId) {
+                    currentCustomPackId = null;
+                    document.getElementById('texturePackName').value = '';
+                }
+                
+                saveAllTexturePacks();
+                updateSavedPacksList();
+                showTexturePackMessage('Texture pack deleted', 'success');
+            }
+        }
+        
+        function saveAllTexturePacks() {
+            const packsArray = Array.from(savedTexturePacks.entries()).map(([id, data]) => ({
+                id: id,
+                ...data
+            }));
+            localStorage.setItem('aranya-saved-texture-packs', JSON.stringify(packsArray));
+        }
+        
+        function loadAllTexturePacks() {
+            const saved = localStorage.getItem('aranya-saved-texture-packs');
+            if (saved) {
+                try {
+                    const packsArray = JSON.parse(saved);
+                    savedTexturePacks.clear();
+                    packsArray.forEach(pack => {
+                        savedTexturePacks.set(pack.id, pack);
+                    });
+                    updateSavedPacksList();
+                } catch (e) {
+                    console.warn('Failed to load saved texture packs:', e);
+                }
+            }
+        }
+        
+        function updateSavedPacksList() {
+            const container = document.getElementById('savedTexturePacksList');
+            container.innerHTML = '';
+            
+            if (savedTexturePacks.size === 0) {
+                container.innerHTML = '<div style="padding: 1rem; text-align: center; color: var(--text-secondary); font-style: italic; font-size: 0.875rem;">No saved texture packs</div>';
+                return;
+            }
+            
+            const sortedPacks = Array.from(savedTexturePacks.values()).sort((a, b) => 
+                new Date(b.created) - new Date(a.created)
+            );
+            
+            sortedPacks.forEach(pack => {
+                const item = document.createElement('div');
+                item.className = 'saved-pack-item';
+                if (currentCustomPackId === pack.id) {
+                    item.classList.add('active');
+                }
+                
+                const packInfo = document.createElement('div');
+                packInfo.className = 'pack-info';
+                
+                const packName = document.createElement('div');
+                packName.className = 'pack-name';
+                packName.textContent = pack.name;
+                
+                const packDetails = document.createElement('div');
+                packDetails.className = 'pack-details';
+                const createdDate = new Date(pack.created).toLocaleDateString();
+                const nodeCount = pack.customNodeImages ? pack.customNodeImages.length : 0;
+                const hasBackground = pack.backgroundImage ? 'Background' : 'No background';
+                packDetails.textContent = `${createdDate} • ${nodeCount} custom icons • ${hasBackground}`;
+                
+                packInfo.appendChild(packName);
+                packInfo.appendChild(packDetails);
+                
+                const actionsContainer = document.createElement('div');
+                actionsContainer.className = 'pack-actions-buttons';
+                
+                const loadBtn = document.createElement('button');
+                loadBtn.className = 'pack-action-btn load';
+                loadBtn.textContent = 'Load';
+                loadBtn.addEventListener('click', () => loadTexturePack(pack.id));
+                
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'pack-action-btn delete';
+                deleteBtn.textContent = '×';
+                deleteBtn.title = 'Delete pack';
+                deleteBtn.addEventListener('click', () => deleteTexturePack(pack.id));
+                
+                actionsContainer.appendChild(loadBtn);
+                actionsContainer.appendChild(deleteBtn);
+                
+                item.appendChild(packInfo);
+                item.appendChild(actionsContainer);
+                container.appendChild(item);
+            });
+        }
+        
+        function showTexturePackMessage(message, type = 'info') {
+            // Create a temporary message element
+            const messageEl = document.createElement('div');
+            messageEl.style.position = 'fixed';
+            messageEl.style.top = '20px';
+            messageEl.style.right = '20px';
+            messageEl.style.padding = '0.75rem 1rem';
+            messageEl.style.borderRadius = 'var(--radius-md)';
+            messageEl.style.color = 'white';
+            messageEl.style.fontSize = '0.875rem';
+            messageEl.style.zIndex = '10000';
+            messageEl.style.boxShadow = 'var(--shadow-lg)';
+            messageEl.textContent = message;
+            
+            if (type === 'success') {
+                messageEl.style.background = 'var(--success-color)';
+            } else if (type === 'error') {
+                messageEl.style.background = 'var(--error-color)';
+            } else {
+                messageEl.style.background = 'var(--primary-color)';
+            }
+            
+            document.body.appendChild(messageEl);
+            
+            // Remove after 3 seconds
+            setTimeout(() => {
+                if (messageEl.parentNode) {
+                    messageEl.parentNode.removeChild(messageEl);
+                }
+            }, 3000);
+        }
+        
         function resetCustomTexturePack() {
             // Reset custom texture pack to defaults
             texturePacks.custom.backgroundImage = null;
@@ -1630,6 +2000,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             texturePacks.custom.customNodeIcons.clear();
             texturePacks.custom.customNodeImages.clear();
             customBackgroundImage = null;
+            currentCustomPackId = null;
             
             // Reset UI
             document.getElementById('backgroundTheme').value = 'light';
@@ -1637,11 +2008,13 @@ async fn serve_basic_html() -> Html<&'static str> {
             document.getElementById('backgroundOpacity').value = 80;
             document.getElementById('opacityValue').textContent = '80%';
             document.getElementById('defaultNodeIcon').value = '🔵';
+            document.getElementById('texturePackName').value = '';
             
             // Clear localStorage
             localStorage.removeItem('aranya-custom-texture-pack');
             
             updateIndividualNodeIcons();
+            updateSavedPacksList();
             if (currentTexturePack === 'custom') {
                 applyCustomTheme();
             }
@@ -3240,6 +3613,7 @@ async fn serve_basic_html() -> Html<&'static str> {
         initializeCanvas();
         initializeTexturePacks();
         loadCustomTexturePack();
+        loadAllTexturePacks();
         loadPreferences();
         connectWebSocket();
     </script>
