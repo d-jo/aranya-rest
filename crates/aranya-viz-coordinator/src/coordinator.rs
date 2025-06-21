@@ -322,6 +322,9 @@ async fn serve_basic_html() -> Html<&'static str> {
             border: 1px solid var(--border-color);
             border-radius: var(--radius-md);
             box-shadow: var(--shadow-sm);
+            overflow-x: hidden;
+            width: 100%;
+            box-sizing: border-box;
         }
         
         .custom-texture-panel h5 {
@@ -359,54 +362,74 @@ async fn serve_basic_html() -> Html<&'static str> {
         
         .individual-icons {
             margin-top: 0.75rem;
-            padding: 0.75rem;
+            padding: 0.5rem;
             background: var(--background-color);
             border-radius: var(--radius-sm);
             border: 1px solid var(--border-color);
-            max-height: 200px;
+            max-height: 300px;
             overflow-y: auto;
+            overflow-x: hidden;
         }
         
         .node-icon-item {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.5rem;
-            margin: 0.25rem 0;
+            flex-direction: column;
+            padding: 0.75rem 0.5rem;
+            margin: 0.5rem 0;
             background: var(--surface-color);
             border-radius: var(--radius-sm);
             border: 1px solid var(--border-color);
+            gap: 0.5rem;
+        }
+        
+        .node-icon-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            min-width: 0;
         }
         
         .node-icon-item .node-id {
             font-size: 0.75rem;
             color: var(--text-secondary);
             font-family: monospace;
-        }
-        
-        .node-icon-item .icon-input {
-            width: 60px;
-            padding: 0.25rem;
-            margin: 0;
+            font-weight: 600;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         
         .node-icon-controls {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
+            gap: 0.375rem;
+            width: 100%;
+            flex-wrap: wrap;
+        }
+        
+        .node-icon-controls-row {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            flex: 1;
+            min-width: 0;
         }
         
         .icon-preview {
-            width: 40px;
-            height: 40px;
+            width: 36px;
+            height: 36px;
             border: 1px solid var(--border-color);
             border-radius: var(--radius-sm);
             display: flex;
             align-items: center;
             justify-content: center;
             background: var(--background-color);
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             overflow: hidden;
+            flex-shrink: 0;
         }
         
         .icon-preview img {
@@ -416,15 +439,29 @@ async fn serve_basic_html() -> Html<&'static str> {
             border-radius: var(--radius-sm);
         }
         
-        .icon-upload-btn {
+        .icon-input {
+            flex: 1;
+            min-width: 50px;
             padding: 0.25rem 0.5rem;
-            font-size: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: var(--background-color);
+            font-size: 1rem;
+            text-align: center;
+            color: var(--text-primary);
+        }
+        
+        .icon-upload-btn {
+            padding: 0.375rem 0.5rem;
+            font-size: 0.7rem;
             background: var(--accent-color);
             color: white;
             border: none;
             border-radius: var(--radius-sm);
             cursor: pointer;
             transition: background-color 0.2s ease;
+            white-space: nowrap;
+            font-weight: 600;
         }
         
         .icon-upload-btn:hover {
@@ -432,14 +469,20 @@ async fn serve_basic_html() -> Html<&'static str> {
         }
         
         .icon-clear-btn {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.75rem;
+            padding: 0.375rem 0.5rem;
+            font-size: 0.875rem;
             background: var(--error-color);
             color: white;
             border: none;
             border-radius: var(--radius-sm);
             cursor: pointer;
             transition: background-color 0.2s ease;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
         }
         
         .icon-clear-btn:hover {
@@ -447,6 +490,39 @@ async fn serve_basic_html() -> Html<&'static str> {
         }
         
         .hidden-file-input {
+            display: none;
+        }
+        
+        .node-icons-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+        
+        .toggle-btn {
+            background: none;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 0.25rem 0.5rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.75rem;
+            min-width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .toggle-btn:hover {
+            background: var(--background-color);
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        
+        .node-icon-section.collapsed {
             display: none;
         }
         
@@ -470,6 +546,8 @@ async fn serve_basic_html() -> Html<&'static str> {
             height: fit-content;
             max-height: calc(100vh - 8rem);
             overflow-y: auto;
+            overflow-x: hidden;
+            min-width: 0;
         }
         
         .panel h3 {
@@ -778,8 +856,11 @@ async fn serve_basic_html() -> Html<&'static str> {
                             <span id="opacityValue">80%</span>
                         </div>
                         
-                        <h5>🎯 Node Icons</h5>
-                        <div class="node-icon-section">
+                        <div class="node-icons-header">
+                            <h5>🎯 Node Icons</h5>
+                            <button id="toggleNodeIcons" class="toggle-btn">▼</button>
+                        </div>
+                        <div id="nodeIconSection" class="node-icon-section">
                             <div class="form-group">
                                 <label>Default Icon for New Nodes:</label>
                                 <input type="text" id="defaultNodeIcon" value="🔵" placeholder="🔵" class="icon-input">
@@ -1144,6 +1225,9 @@ async fn serve_basic_html() -> Html<&'static str> {
             // Save and reset buttons
             document.getElementById('saveCustomTexture').addEventListener('click', saveCustomTexturePack);
             document.getElementById('resetCustomTexture').addEventListener('click', resetCustomTexturePack);
+            
+            // Toggle button for node icons section
+            document.getElementById('toggleNodeIcons').addEventListener('click', toggleNodeIconsSection);
         }
         
         function handleBackgroundUpload(event) {
@@ -1206,12 +1290,24 @@ async fn serve_basic_html() -> Html<&'static str> {
                 const item = document.createElement('div');
                 item.className = 'node-icon-item';
                 
+                // Header with node name
+                const header = document.createElement('div');
+                header.className = 'node-icon-header';
+                
                 const nodeLabel = document.createElement('span');
                 nodeLabel.className = 'node-id';
                 nodeLabel.textContent = `${node.name || 'Node'} (${nodeId.slice(0, 8)}...)`;
+                nodeLabel.title = `Node ID: ${nodeId}`;
                 
+                header.appendChild(nodeLabel);
+                
+                // Controls container
                 const controlsContainer = document.createElement('div');
                 controlsContainer.className = 'node-icon-controls';
+                
+                // First row: Preview and input
+                const firstRow = document.createElement('div');
+                firstRow.className = 'node-icon-controls-row';
                 
                 // Icon preview
                 const iconPreview = document.createElement('div');
@@ -1254,6 +1350,11 @@ async fn serve_basic_html() -> Html<&'static str> {
                     }
                 });
                 
+                // Second row: Buttons
+                const secondRow = document.createElement('div');
+                secondRow.className = 'node-icon-controls-row';
+                secondRow.style.justifyContent = 'flex-end';
+                
                 // Hidden file input for image upload
                 const fileInput = document.createElement('input');
                 fileInput.type = 'file';
@@ -1266,7 +1367,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                 // Upload button
                 const uploadBtn = document.createElement('button');
                 uploadBtn.className = 'icon-upload-btn';
-                uploadBtn.textContent = 'Image';
+                uploadBtn.textContent = '📁 Image';
                 uploadBtn.title = 'Upload image for this node';
                 uploadBtn.addEventListener('click', () => {
                     fileInput.click();
@@ -1287,13 +1388,18 @@ async fn serve_basic_html() -> Html<&'static str> {
                     }
                 });
                 
-                controlsContainer.appendChild(iconPreview);
-                controlsContainer.appendChild(iconInput);
-                controlsContainer.appendChild(uploadBtn);
-                controlsContainer.appendChild(clearBtn);
-                controlsContainer.appendChild(fileInput);
+                // Assemble the layout
+                firstRow.appendChild(iconPreview);
+                firstRow.appendChild(iconInput);
                 
-                item.appendChild(nodeLabel);
+                secondRow.appendChild(uploadBtn);
+                secondRow.appendChild(clearBtn);
+                secondRow.appendChild(fileInput);
+                
+                controlsContainer.appendChild(firstRow);
+                controlsContainer.appendChild(secondRow);
+                
+                item.appendChild(header);
                 item.appendChild(controlsContainer);
                 container.appendChild(item);
             });
@@ -1337,6 +1443,21 @@ async fn serve_basic_html() -> Html<&'static str> {
                     }
                 };
                 reader.readAsDataURL(file);
+            }
+        }
+        
+        function toggleNodeIconsSection() {
+            const section = document.getElementById('nodeIconSection');
+            const toggleBtn = document.getElementById('toggleNodeIcons');
+            
+            if (section.classList.contains('collapsed')) {
+                section.classList.remove('collapsed');
+                toggleBtn.textContent = '▼';
+                toggleBtn.title = 'Collapse node icons';
+            } else {
+                section.classList.add('collapsed');
+                toggleBtn.textContent = '▶';
+                toggleBtn.title = 'Expand node icons';
             }
         }
         
