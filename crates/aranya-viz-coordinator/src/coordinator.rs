@@ -349,6 +349,23 @@ async fn serve_basic_html() -> Html<&'static str> {
             margin: 0.25rem 0;
         }
         
+        .theme-select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: var(--background-color);
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        
+        .theme-select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+        
         .icon-input {
             width: 100%;
             padding: 0.5rem;
@@ -847,6 +864,13 @@ async fn serve_basic_html() -> Html<&'static str> {
                     <div id="customTexturePanel" class="custom-texture-panel" style="display: none;">
                         <h5>📸 Custom Background</h5>
                         <div class="form-group">
+                            <label for="backgroundTheme">Interface Theme:</label>
+                            <select id="backgroundTheme" class="theme-select">
+                                <option value="light">☀️ Light Theme</option>
+                                <option value="dark">🌙 Dark Theme</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
                             <label for="backgroundUpload">Upload Background Image:</label>
                             <input type="file" id="backgroundUpload" accept="image/*" class="file-input">
                         </div>
@@ -1142,6 +1166,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                 pattern: null,
                 backgroundImage: null,
                 backgroundOpacity: 80,
+                backgroundTheme: 'light', // 'light' or 'dark'
                 size: '40px 40px',
                 nodeIcons: '🔵',
                 customNodeIcons: new Map(), // nodeId -> icon (text/emoji)
@@ -1197,6 +1222,15 @@ async fn serve_basic_html() -> Html<&'static str> {
         }
         
         function initializeCustomTextureControls() {
+            // Background theme selector
+            const backgroundTheme = document.getElementById('backgroundTheme');
+            backgroundTheme.addEventListener('change', (e) => {
+                texturePacks.custom.backgroundTheme = e.target.value;
+                if (currentTexturePack === 'custom') {
+                    applyCustomTheme();
+                }
+            });
+            
             // Background upload
             const backgroundUpload = document.getElementById('backgroundUpload');
             backgroundUpload.addEventListener('change', handleBackgroundUpload);
@@ -1461,17 +1495,52 @@ async fn serve_basic_html() -> Html<&'static str> {
             }
         }
         
+        function applyCustomTheme() {
+            const pack = texturePacks.custom;
+            
+            if (pack.backgroundTheme === 'dark') {
+                // Apply dark theme
+                document.documentElement.style.setProperty('--surface-color', '#2d3748');
+                document.documentElement.style.setProperty('--text-primary', '#f7fafc');
+                document.documentElement.style.setProperty('--text-secondary', '#a0aec0');
+                document.documentElement.style.setProperty('--border-color', '#4a5568');
+                document.documentElement.style.setProperty('--background-color', '#1a202c');
+            } else {
+                // Apply light theme
+                document.documentElement.style.setProperty('--surface-color', '#ffffff');
+                document.documentElement.style.setProperty('--text-primary', '#1e293b');
+                document.documentElement.style.setProperty('--text-secondary', '#64748b');
+                document.documentElement.style.setProperty('--border-color', '#e2e8f0');
+                document.documentElement.style.setProperty('--background-color', '#f8fafc');
+            }
+            
+            updateCustomBackground();
+            draw();
+        }
+        
         function saveCustomTexturePack() {
             // Save to localStorage for persistence
             const customPack = {
                 backgroundImage: texturePacks.custom.backgroundImage,
                 backgroundOpacity: texturePacks.custom.backgroundOpacity,
+                backgroundTheme: texturePacks.custom.backgroundTheme,
                 nodeIcons: texturePacks.custom.nodeIcons,
                 customNodeIcons: Array.from(texturePacks.custom.customNodeIcons.entries()),
                 customNodeImages: Array.from(texturePacks.custom.customNodeImages.entries())
             };
             
             localStorage.setItem('aranya-custom-texture-pack', JSON.stringify(customPack));
+            
+            // Also save current texture pack selection and other preferences
+            const preferences = {
+                currentTexturePack: currentTexturePack,
+                showConnections: showConnections,
+                viewportX: viewportX,
+                viewportY: viewportY,
+                viewportScale: viewportScale
+            };
+            
+            localStorage.setItem('aranya-preferences', JSON.stringify(preferences));
             
             // Show confirmation
             const button = document.getElementById('saveCustomTexture');
@@ -1491,11 +1560,13 @@ async fn serve_basic_html() -> Html<&'static str> {
                     const customPack = JSON.parse(saved);
                     texturePacks.custom.backgroundImage = customPack.backgroundImage;
                     texturePacks.custom.backgroundOpacity = customPack.backgroundOpacity || 80;
+                    texturePacks.custom.backgroundTheme = customPack.backgroundTheme || 'light';
                     texturePacks.custom.nodeIcons = customPack.nodeIcons || '🔵';
                     texturePacks.custom.customNodeIcons = new Map(customPack.customNodeIcons || []);
                     texturePacks.custom.customNodeImages = new Map(customPack.customNodeImages || []);
                     
                     // Update UI
+                    document.getElementById('backgroundTheme').value = texturePacks.custom.backgroundTheme;
                     document.getElementById('backgroundOpacity').value = texturePacks.custom.backgroundOpacity;
                     document.getElementById('opacityValue').textContent = texturePacks.custom.backgroundOpacity + '%';
                     document.getElementById('defaultNodeIcon').value = texturePacks.custom.nodeIcons;
@@ -1507,16 +1578,61 @@ async fn serve_basic_html() -> Html<&'static str> {
             }
         }
         
+        function loadPreferences() {
+            const saved = localStorage.getItem('aranya-preferences');
+            if (saved) {
+                try {
+                    const preferences = JSON.parse(saved);
+                    
+                    // Restore viewport settings
+                    if (preferences.viewportX !== undefined) viewportX = preferences.viewportX;
+                    if (preferences.viewportY !== undefined) viewportY = preferences.viewportY;
+                    if (preferences.viewportScale !== undefined) viewportScale = preferences.viewportScale;
+                    if (preferences.showConnections !== undefined) showConnections = preferences.showConnections;
+                    
+                    // Restore texture pack selection
+                    if (preferences.currentTexturePack && texturePacks[preferences.currentTexturePack]) {
+                        setTimeout(() => {
+                            setTexturePack(preferences.currentTexturePack);
+                        }, 100); // Small delay to ensure DOM is ready
+                    }
+                } catch (e) {
+                    console.warn('Failed to load preferences:', e);
+                }
+            }
+        }
+        
+        function savePreferences() {
+            const preferences = {
+                currentTexturePack: currentTexturePack,
+                showConnections: showConnections,
+                viewportX: viewportX,
+                viewportY: viewportY,
+                viewportScale: viewportScale
+            };
+            
+            localStorage.setItem('aranya-preferences', JSON.stringify(preferences));
+        }
+        
+        // Auto-save preferences periodically and on certain actions
+        let preferenceSaveTimeout = null;
+        function schedulePreferenceSave() {
+            if (preferenceSaveTimeout) clearTimeout(preferenceSaveTimeout);
+            preferenceSaveTimeout = setTimeout(savePreferences, 1000); // Save 1 second after last change
+        }
+        
         function resetCustomTexturePack() {
             // Reset custom texture pack to defaults
             texturePacks.custom.backgroundImage = null;
             texturePacks.custom.backgroundOpacity = 80;
+            texturePacks.custom.backgroundTheme = 'light';
             texturePacks.custom.nodeIcons = '🔵';
             texturePacks.custom.customNodeIcons.clear();
             texturePacks.custom.customNodeImages.clear();
             customBackgroundImage = null;
             
             // Reset UI
+            document.getElementById('backgroundTheme').value = 'light';
             document.getElementById('backgroundUpload').value = '';
             document.getElementById('backgroundOpacity').value = 80;
             document.getElementById('opacityValue').textContent = '80%';
@@ -1527,7 +1643,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             
             updateIndividualNodeIcons();
             if (currentTexturePack === 'custom') {
-                updateCustomBackground();
+                applyCustomTheme();
             }
         }
         
@@ -1549,30 +1665,33 @@ async fn serve_basic_html() -> Html<&'static str> {
             const viewport = document.querySelector('.canvas-viewport');
             
             if (packName === 'custom') {
-                updateCustomBackground();
+                applyCustomTheme();
             } else {
                 viewport.style.setProperty('--texture-bg', pack.bg);
                 viewport.style.setProperty('--texture-pattern', pack.pattern);
                 viewport.style.setProperty('--texture-size', pack.size);
                 viewport.style.opacity = 1;
-            }
-            
-            // Update CSS variables for dark theme
-            if (packName === 'dark') {
-                document.documentElement.style.setProperty('--surface-color', '#2d3748');
-                document.documentElement.style.setProperty('--text-primary', '#f7fafc');
-                document.documentElement.style.setProperty('--text-secondary', '#a0aec0');
-                document.documentElement.style.setProperty('--border-color', '#4a5568');
-                document.documentElement.style.setProperty('--background-color', '#1a1a1a');
-            } else {
-                document.documentElement.style.setProperty('--surface-color', '#ffffff');
-                document.documentElement.style.setProperty('--text-primary', '#1e293b');
-                document.documentElement.style.setProperty('--text-secondary', '#64748b');
-                document.documentElement.style.setProperty('--border-color', '#e2e8f0');
-                document.documentElement.style.setProperty('--background-color', '#f8fafc');
+                
+                // Update CSS variables for theme
+                if (packName === 'dark') {
+                    document.documentElement.style.setProperty('--surface-color', '#2d3748');
+                    document.documentElement.style.setProperty('--text-primary', '#f7fafc');
+                    document.documentElement.style.setProperty('--text-secondary', '#a0aec0');
+                    document.documentElement.style.setProperty('--border-color', '#4a5568');
+                    document.documentElement.style.setProperty('--background-color', '#1a1a1a');
+                } else {
+                    document.documentElement.style.setProperty('--surface-color', '#ffffff');
+                    document.documentElement.style.setProperty('--text-primary', '#1e293b');
+                    document.documentElement.style.setProperty('--text-secondary', '#64748b');
+                    document.documentElement.style.setProperty('--border-color', '#e2e8f0');
+                    document.documentElement.style.setProperty('--background-color', '#f8fafc');
+                }
             }
             
             draw();
+            
+            // Auto-save preferences when texture pack changes
+            schedulePreferenceSave();
         }
         let ws = null;
         let nodes = new Map();
@@ -2198,6 +2317,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                 lastPanX = e.clientX;
                 lastPanY = e.clientY;
                 draw();
+                schedulePreferenceSave();
             } else if (dragNode && currentTool === 'select') {
                 // Handle node dragging
                 const worldPos = screenToWorld(x, y);
@@ -2282,6 +2402,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             
             updateZoomDisplay();
             draw();
+            schedulePreferenceSave();
         });
 
         // Hide context menu on click elsewhere
@@ -2302,6 +2423,7 @@ async fn serve_basic_html() -> Html<&'static str> {
         function toggleConnections() {
             showConnections = !showConnections;
             draw();
+            schedulePreferenceSave();
         }
         
         function resetView() {
@@ -2310,6 +2432,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             viewportScale = 1;
             updateZoomDisplay();
             draw();
+            schedulePreferenceSave();
         }
         
         function updateZoomDisplay() {
@@ -3117,6 +3240,7 @@ async fn serve_basic_html() -> Html<&'static str> {
         initializeCanvas();
         initializeTexturePacks();
         loadCustomTexturePack();
+        loadPreferences();
         connectWebSocket();
     </script>
 </body>
