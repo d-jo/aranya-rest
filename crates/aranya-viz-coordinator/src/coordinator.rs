@@ -409,6 +409,7 @@ async fn serve_basic_html() -> Html<&'static str> {
         let messageBubbles = new Map();
         let messagePollingInterval = null;
         let lastKnownMessages = new Map(); // nodeId-teamId -> Set of messageIds
+        let messageSenders = new Map(); // message_id -> actual sender node_id
         
         // Viewport/camera variables for panning and zooming
         let viewportX = 0;
@@ -536,6 +537,9 @@ async fn serve_basic_html() -> Html<&'static str> {
                     }
                     break;
                 case 'MessageSent':
+                    // Track the actual sender for this message
+                    messageSenders.set(message.message_id, message.node_id);
+                    
                     // Add to recent messages
                     const sentMessage = {
                         id: message.message_id,
@@ -547,7 +551,16 @@ async fn serve_basic_html() -> Html<&'static str> {
                     };
                     recentMessages.push(sentMessage);
                     updateRecentMessages();
-                    console.log(`📤 Message sent by ${sentMessage.author_name}: "${sentMessage.text}"`);
+                    const authorDisplay = sentMessage.author_name !== 'Unknown' ? 
+                        sentMessage.author_name : 
+                        sentMessage.author_id.substring(0, 8) + '...';
+                    console.log(`📤 Message sent by ${authorDisplay}: "${sentMessage.text}"`);
+                    
+                    // Show bubble on sending node
+                    const sendingNode = nodes.get(message.node_id);
+                    if (sendingNode) {
+                        showMessageBubble(message.node_id, sentMessage.text, authorDisplay);
+                    }
                     break;
                 case 'MessageReceived':
                     // Track messages per node-team to avoid duplicates
@@ -561,13 +574,17 @@ async fn serve_basic_html() -> Html<&'static str> {
                     if (!knownMessageIds.has(message.message_id)) {
                         knownMessageIds.add(message.message_id);
                         
-                        // Get author name from node ID
-                        const authorName = getNodeName(message.author_id);
+                        // Get the actual sender ID from our tracking map
+                        const actualSenderId = messageSenders.get(message.message_id);
+                        const authorName = actualSenderId ? getNodeName(actualSenderId) : 'Unknown';
+                        const authorDisplay = authorName !== 'Unknown' ? 
+                            authorName : 
+                            (actualSenderId || message.author_id).substring(0, 8) + '...';
                         
                         const receivedMessage = {
                             id: message.message_id,
-                            author_id: message.author_id,
-                            author_name: authorName,
+                            author_id: actualSenderId || message.author_id,
+                            author_name: authorDisplay,
                             text: message.text,
                             timestamp: message.timestamp,
                             team_id: message.team_id
@@ -582,8 +599,8 @@ async fn serve_basic_html() -> Html<&'static str> {
                         // Show bubble on receiving node 
                         const receivingNode = nodes.get(message.node_id);
                         if (receivingNode) {
-                            console.log(`📨 Node ${receivingNode.name} received message: "${receivedMessage.text}" from ${receivedMessage.author_name}`);
-                            showMessageBubble(message.node_id, receivedMessage.text, receivedMessage.author_name);
+                            console.log(`📨 Node ${receivingNode.name} received message: "${receivedMessage.text}" from ${authorDisplay}`);
+                            showMessageBubble(message.node_id, receivedMessage.text, authorDisplay);
                         }
                     }
                     break;
@@ -1669,9 +1686,13 @@ async fn serve_basic_html() -> Html<&'static str> {
             let html = '';
             recentMessages.slice(-10).forEach(msg => {
                 const time = new Date(msg.timestamp * 1000).toLocaleTimeString();
+                // Show author name if available, otherwise truncate ID
+                const authorDisplay = msg.author_name !== 'Unknown' ? 
+                    msg.author_name : 
+                    msg.author_id.substring(0, 8) + '...';
                 html += `
                     <div style="margin-bottom: 8px; padding: 6px; background: #f9f9f9; border-radius: 4px;">
-                        <div style="font-weight: bold; color: #333;">${msg.author_name} (${time})</div>
+                        <div style="font-weight: bold; color: #333;">${authorDisplay} (${time})</div>
                         <div style="color: #666; margin-top: 2px;">${msg.text}</div>
                     </div>
                 `;
