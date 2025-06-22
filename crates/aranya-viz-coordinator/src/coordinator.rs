@@ -103,57 +103,91 @@ async fn serve_basic_html() -> Html<&'static str> {
             background: var(--background-color);
             color: var(--text-primary);
             line-height: 1.6;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
         
         .container { 
-            max-width: 100vw; 
-            margin: 0; 
-            padding: 1rem;
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 1rem;
+            display: flex;
+            flex-direction: column;
             height: 100vh;
+            overflow: hidden;
         }
         
         .header { 
-            text-align: center; 
-            padding: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
             background: var(--surface-color);
-            border-radius: var(--radius-lg);
             box-shadow: var(--shadow-sm);
-            border: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
         }
         
         .header h1 {
-            margin: 0 0 0.5rem 0;
+            margin: 0;
             color: var(--primary-color);
-            font-size: 1.875rem;
-            font-weight: 700;
+            font-size: 1.25rem;
+            font-weight: 600;
         }
         
         .header p {
             margin: 0;
             color: var(--text-secondary);
-            font-size: 0.875rem;
+            font-size: 0.75rem;
         }
         
         .main-content {
-            display: grid;
-            grid-template-columns: 320px 1fr 320px;
-            gap: 1rem;
+            display: flex;
+            gap: 0;
             flex: 1;
             min-height: 0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .resizer {
+            width: 4px;
+            background: var(--border-color);
+            cursor: col-resize;
+            position: relative;
+            transition: background-color 0.2s;
+            flex-shrink: 0;
+        }
+        
+        .resizer:hover {
+            background: var(--primary-color);
+        }
+        
+        .resizer::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 2px;
+            height: 30px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 1px;
         }
         
         .canvas-container { 
             background: var(--surface-color);
-            border-radius: var(--radius-lg);
             overflow: hidden;
-            box-shadow: var(--shadow-md);
-            border: 1px solid var(--border-color);
             position: relative;
             display: flex;
             flex-direction: column;
+            flex: 1;
+            min-width: 400px;
+            height: 100%;
         }
         
         .canvas-header {
@@ -221,13 +255,13 @@ async fn serve_basic_html() -> Html<&'static str> {
         }
         
         .status { 
-            background: var(--surface-color);
-            padding: 0.75rem 1rem;
-            border-radius: var(--radius-md);
-            box-shadow: var(--shadow-sm);
+            background: rgba(255, 255, 255, 0.9);
+            padding: 0.5rem 0.75rem;
+            border-radius: var(--radius-sm);
             border: 1px solid var(--border-color);
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             color: var(--text-secondary);
+            display: inline-block;
         }
         
         .notification-area {
@@ -769,15 +803,13 @@ async fn serve_basic_html() -> Html<&'static str> {
         }
         .panel {
             background: var(--surface-color);
-            border-radius: var(--radius-lg);
-            padding: 1rem;
-            box-shadow: var(--shadow-sm);
-            border: 1px solid var(--border-color);
-            height: fit-content;
-            max-height: calc(100vh - 8rem);
+            padding: 1.5rem;
             overflow-y: auto;
             overflow-x: hidden;
-            min-width: 0;
+            min-width: 280px;
+            max-width: 600px;
+            flex-shrink: 0;
+            height: 100%;
         }
         
         .panel h3 {
@@ -1058,12 +1090,17 @@ async fn serve_basic_html() -> Html<&'static str> {
 <body>
     <div class="container">
         <div class="header">
-            <h1>Aranya Visualization</h1>
+            <div class="header-left">
+                <div class="status" id="status">
+                    Connecting to WebSocket...
+                </div>
+                <h1>Aranya Visualization</h1>
+            </div>
             <p>Click to place nodes. Drag to move them. Pan by dragging empty space. Zoom with mouse wheel. Right-click for options.</p>
         </div>
         
         <div class="main-content">
-            <div class="panel">
+            <div class="panel" id="leftPanel" style="width: 350px; border-right: 1px solid var(--border-color);">
                 <div class="texture-selector">
                     <h4>🎨 Background Themes</h4>
                     <div class="texture-grid">
@@ -1157,6 +1194,8 @@ async fn serve_basic_html() -> Html<&'static str> {
                 </div>
             </div>
             
+            <div class="resizer" id="leftResizer"></div>
+            
             <div class="canvas-container">
                 <div class="canvas-header">
                     <div class="controls">
@@ -1177,7 +1216,9 @@ async fn serve_basic_html() -> Html<&'static str> {
                 </div>
             </div>
             
-            <div class="panel">
+            <div class="resizer" id="rightResizer"></div>
+            
+            <div class="panel" id="rightPanel" style="width: 320px; border-left: 1px solid var(--border-color);">
                 <h3>🏢 Team Management</h3>
                 
                 <h4>Create Team</h4>
@@ -1247,10 +1288,6 @@ async fn serve_basic_html() -> Html<&'static str> {
             </div>
         </div>
         
-        <div class="status" id="status">
-            Connecting to WebSocket...
-        </div>
-        
         <div class="notification-area" id="notificationArea">
         </div>
     </div>
@@ -1262,105 +1299,6 @@ async fn serve_basic_html() -> Html<&'static str> {
         <div class="context-menu-item" onclick="removeSyncPeers()">Remove Sync Peers</div>
         <div class="context-menu-item" onclick="sendMessageToNode()">Send Message</div>
         <div class="context-menu-item" onclick="viewNodeInfo()">View Info</div>
-    </div>
-    
-    <div class="message-panel">
-        <h3>Send Message</h3>
-        <div style="margin-bottom: 10px;">
-            <label for="messageSenderSelector">Select Sender Node:</label>
-            <select id="messageSenderSelector" style="width: 100%; padding: 5px; margin-top: 5px;">
-                <option value="">-- Select Sender Node --</option>
-            </select>
-        </div>
-        <div style="margin-bottom: 10px;">
-            <label for="messageTeamSelector">Select Team:</label>
-            <select id="messageTeamSelector" style="width: 100%; padding: 5px; margin-top: 5px;">
-                <option value="">-- Select Team to Send Message --</option>
-            </select>
-        </div>
-        <div style="margin-bottom: 10px;">
-            <label for="messageInput">Message:</label>
-            <textarea id="messageInput" class="message-input" placeholder="Type your message here..."></textarea>
-        </div>
-        <button class="message-send-btn" onclick="sendBroadcastMessage()" id="sendMessageBtn" disabled>Send Message</button>
-        
-        <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 15px;">
-            <h4>Recent Messages</h4>
-            <div id="recentMessages" style="max-height: 200px; overflow-y: auto; font-size: 12px;">
-                <p style="color: #999; font-style: italic;">No messages yet</p>
-            </div>
-        </div>
-    </div>
-    
-    <div class="teams-panel">
-        <h3>Team Management</h3>
-        
-        <div class="team-section">
-            <h4>Create Team</h4>
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                <select id="nodeSelector" style="flex: 1; padding: 5px;">
-                    <option value="">-- Select Node --</option>
-                </select>
-                <button onclick="createTeamFromUI()" style="padding: 5px 10px;">Create Team</button>
-            </div>
-            <input type="text" id="teamNameInput" placeholder="Team name..." style="width: 100%; padding: 5px; margin-bottom: 10px;">
-        </div>
-        
-        <div class="team-section">
-            <h4>Join Team</h4>
-            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                <select id="joinNodeSelector" style="flex: 1; padding: 5px;">
-                    <option value="">-- Select Node --</option>
-                </select>
-                <button onclick="joinTeamFromUI()" style="padding: 5px 10px;">Join Team</button>
-            </div>
-            <select id="availableTeamsSelector" style="width: 100%; padding: 5px; margin-bottom: 10px;">
-                <option value="">-- Select Team to Join --</option>
-            </select>
-        </div>
-        
-        <div class="team-section">
-            <h4>Sync Operations</h4>
-            <p class="no-team-selected" id="selectedTeamInfo">No team selected for sync operations</p>
-            <select id="teamSelector" onchange="selectTeam()" style="width: 100%; padding: 5px; margin: 10px 0;">
-                <option value="">-- Select Team for Sync --</option>
-            </select>
-        </div>
-        
-        <div class="team-section">
-            <h4>Team Actions</h4>
-            <div style="display: flex; flex-direction: column; gap: 5px; margin-bottom: 15px;">
-                <button onclick="addAllNodesToSelectedTeam()" style="padding: 8px; background: #4CAF50; color: white; border: none; border-radius: 4px;">
-                    Add All Nodes to Selected Team
-                </button>
-                <button onclick="autoSyncTeamMembers()" style="padding: 8px; background: #2196F3; color: white; border: none; border-radius: 4px;" title="Create bidirectional sync connections between all team members (full mesh)">
-                    Auto-Sync All Team Members
-                </button>
-                <button onclick="syncAllMembersFromOwner()" style="padding: 8px; background: #9C27B0; color: white; border: none; border-radius: 4px;" title="Create sync connections from all team members to the owner. This ensures members receive owner commands for team management operations.">
-                    Make Owner Sync Peer for All
-                </button>
-                <button onclick="quickTeamSetup()" style="padding: 8px; background: #FF9800; color: white; border: none; border-radius: 4px;">
-                    Quick Team Setup (All Nodes)
-                </button>
-            </div>
-            <div style="font-size: 11px; color: #666; margin-top: 10px; padding: 8px; background: #f9f9f9; border-radius: 4px;">
-                <strong>Node Role Outlines:</strong><br>
-                • <span style="color: #FF5722; font-weight: bold;">Red</span>: Owner<br>
-                • <span style="color: #FF9800; font-weight: bold;">Orange</span>: Admin<br>
-                • <span style="color: #9C27B0; font-weight: bold;">Purple</span>: Operator<br>
-                • <span style="color: #2196F3; font-weight: bold;">Blue</span>: Member<br>
-                <br>
-                <strong>Sync Types:</strong><br>
-                • <span style="color: #2196F3;">Auto-Sync All</span>: Full mesh (bidirectional)<br>
-                • <span style="color: #9C27B0;">Owner Sync Peer</span>: Owner → Members (command flow)<br>
-                <em>Arrows show data/command flow direction</em>
-            </div>
-        </div>
-        
-        <div class="team-section">
-            <h4>All Teams</h4>
-            <div id="teamsList"></div>
-        </div>
     </div>
 
     <script>
@@ -2147,6 +2085,88 @@ async fn serve_basic_html() -> Html<&'static str> {
             // Auto-save preferences when texture pack changes
             schedulePreferenceSave();
         }
+        // Resizable panels functionality
+        function initializeResizers() {
+            const leftPanel = document.getElementById('leftPanel');
+            const rightPanel = document.getElementById('rightPanel');
+            const leftResizer = document.getElementById('leftResizer');
+            const rightResizer = document.getElementById('rightResizer');
+            const container = document.querySelector('.main-content');
+            
+            let isResizing = false;
+            let currentResizer = null;
+            let startX = 0;
+            let startWidth = 0;
+            let targetPanel = null;
+            
+            function startResize(e, resizer, panel) {
+                isResizing = true;
+                currentResizer = resizer;
+                targetPanel = panel;
+                startX = e.clientX;
+                startWidth = parseInt(window.getComputedStyle(panel).width, 10);
+                
+                document.body.style.cursor = 'col-resize';
+                document.body.style.userSelect = 'none';
+                
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', stopResize);
+            }
+            
+            function handleMouseMove(e) {
+                if (!isResizing) return;
+                
+                const diff = e.clientX - startX;
+                let newWidth = startWidth;
+                
+                if (currentResizer === leftResizer) {
+                    newWidth = startWidth + diff;
+                } else {
+                    newWidth = startWidth - diff;
+                }
+                
+                // Enforce min/max constraints
+                newWidth = Math.max(280, Math.min(600, newWidth));
+                targetPanel.style.width = newWidth + 'px';
+                
+                // Trigger canvas redraw
+                if (typeof draw !== 'undefined') {
+                    draw();
+                }
+            }
+            
+            function stopResize() {
+                isResizing = false;
+                currentResizer = null;
+                targetPanel = null;
+                
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                
+                document.removeEventListener('mousemove', handleMouseMove);
+                document.removeEventListener('mouseup', stopResize);
+                
+                // Save panel widths to localStorage
+                localStorage.setItem('leftPanelWidth', leftPanel.style.width);
+                localStorage.setItem('rightPanelWidth', rightPanel.style.width);
+            }
+            
+            // Add event listeners
+            leftResizer.addEventListener('mousedown', (e) => startResize(e, leftResizer, leftPanel));
+            rightResizer.addEventListener('mousedown', (e) => startResize(e, rightResizer, rightPanel));
+            
+            // Restore saved widths
+            const savedLeftWidth = localStorage.getItem('leftPanelWidth');
+            const savedRightWidth = localStorage.getItem('rightPanelWidth');
+            
+            if (savedLeftWidth) {
+                leftPanel.style.width = savedLeftWidth;
+            }
+            if (savedRightWidth) {
+                rightPanel.style.width = savedRightWidth;
+            }
+        }
+        
         let ws = null;
         let nodes = new Map();
         let connections = new Map();
@@ -3854,6 +3874,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         initializeCanvas();
         setupCanvasEventListeners();
         initializeTexturePacks();
+        initializeResizers();
         loadCustomTexturePack();
         loadAllTexturePacks();
         loadPreferences();
