@@ -803,7 +803,7 @@ async fn serve_basic_html() -> Html<&'static str> {
         }
         .panel {
             background: var(--surface-color);
-            padding: 1.5rem;
+            padding: 0;
             overflow-y: auto;
             overflow-x: hidden;
             min-width: 280px;
@@ -812,24 +812,88 @@ async fn serve_basic_html() -> Html<&'static str> {
             height: 100%;
         }
         
-        .panel h3 {
-            margin: 0 0 1rem 0;
-            color: var(--text-primary);
-            font-size: 1.125rem;
-            font-weight: 600;
+        .drawer {
+            margin-bottom: 1px;
+            background: var(--surface-color);
             border-bottom: 1px solid var(--border-color);
-            padding-bottom: 0.5rem;
         }
         
-        .panel h4 {
-            margin: 1.5rem 0 0.75rem 0;
-            color: var(--text-primary);
-            font-size: 1rem;
+        .drawer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1rem;
+            background: var(--background-color);
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.2s ease;
+        }
+        
+        .drawer-header:hover {
+            background: #f3f4f6;
+        }
+        
+        .drawer-header.active {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .drawer-header.active .drawer-arrow {
+            opacity: 1;
+        }
+        
+        .drawer-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
             font-weight: 600;
         }
         
-        .panel h4:first-child {
-            margin-top: 0;
+        .drawer-icon {
+            width: 1.25rem;
+            height: 1.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+        }
+        
+        .drawer-arrow {
+            width: 0.75rem;
+            height: 0.75rem;
+            transition: transform 0.2s ease;
+            opacity: 0.6;
+        }
+        
+        .drawer-header.expanded .drawer-arrow {
+            transform: rotate(90deg);
+        }
+        
+        .drawer-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            background: var(--surface-color);
+        }
+        
+        .drawer-content.expanded {
+            max-height: 2000px;
+        }
+        
+        .drawer-inner {
+            padding: 1rem;
+        }
+        
+        .drawer-inner h5 {
+            margin: 0 0 0.75rem 0;
+            color: var(--text-primary);
+            font-size: 0.9375rem;
+            font-weight: 600;
+        }
+        
+        .drawer-inner h5:not(:first-child) {
+            margin-top: 1.5rem;
         }
         
         .form-group {
@@ -1101,96 +1165,122 @@ async fn serve_basic_html() -> Html<&'static str> {
         
         <div class="main-content">
             <div class="panel" id="leftPanel" style="width: 350px; border-right: 1px solid var(--border-color);">
-                <div class="texture-selector">
-                    <h4>🎨 Background Themes</h4>
-                    <div class="texture-grid">
-                        <div class="texture-option selected" data-theme="default" title="Default Grid"></div>
-                        <div class="texture-option" data-theme="dark" title="Dark Theme"></div>
-                        <div class="texture-option" data-theme="blueprint" title="Blueprint"></div>
-                        <div class="texture-option" data-theme="organic" title="Organic"></div>
-                        <div class="texture-option custom" data-theme="custom" title="Custom Texture Pack">+</div>
+                <div class="drawer" data-drawer-id="appearance">
+                    <div class="drawer-header expanded">
+                        <div class="drawer-title">
+                            <span class="drawer-icon">🎨</span>
+                            <span>Appearance</span>
+                        </div>
+                        <span class="drawer-arrow">▶</span>
                     </div>
-                    
-                    <div id="customTexturePanel" class="custom-texture-panel" style="display: none;">
-                        <h5>📸 Custom Background</h5>
-                        <div class="form-group">
-                            <label for="backgroundTheme">Interface Theme:</label>
-                            <select id="backgroundTheme" class="theme-select">
-                                <option value="light">☀️ Light Theme</option>
-                                <option value="dark">🌙 Dark Theme</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="backgroundUpload">Upload Background Image:</label>
-                            <input type="file" id="backgroundUpload" accept="image/*" class="file-input">
-                        </div>
-                        <div class="form-group">
-                            <label for="backgroundOpacity">Background Opacity:</label>
-                            <input type="range" id="backgroundOpacity" min="0" max="100" value="80" class="opacity-slider">
-                            <span id="opacityValue">80%</span>
-                        </div>
-                        
-                        <div class="node-icons-header">
-                            <h5>🎯 Node Icons</h5>
-                            <button id="toggleNodeIcons" class="toggle-btn">▼</button>
-                        </div>
-                        <div id="nodeIconSection" class="node-icon-section">
-                            <div class="form-group">
-                                <label>Default Icon for New Nodes:</label>
-                                <input type="text" id="defaultNodeIcon" value="🔵" placeholder="🔵" class="icon-input">
-                            </div>
-                            <div id="individualNodeIcons" class="individual-icons"></div>
-                        </div>
-                        
-                        <div class="texture-pack-management">
-                            <h5>💾 Texture Pack Management</h5>
-                            
-                            <div class="form-group">
-                                <label for="texturePackName">Pack Name:</label>
-                                <input type="text" id="texturePackName" placeholder="My Custom Pack" class="pack-name-input">
-                            </div>
-                            
-                            <div class="pack-actions">
-                                <button id="saveAsTexturePack" class="btn btn-primary">💾 Save As New Pack</button>
-                                <button id="saveCurrentTexturePack" class="btn btn-success">💾 Update Current Pack</button>
-                            </div>
-                            
-                            <div class="saved-packs-section">
-                                <h6>📁 Saved Texture Packs</h6>
-                                <div id="savedTexturePacksList" class="saved-packs-list"></div>
-                            </div>
-                            
-                            <div class="custom-texture-actions">
-                                <button id="resetCustomTexture" class="btn btn-secondary">🔄 Reset to Defaults</button>
+                    <div class="drawer-content expanded">
+                        <div class="drawer-inner">
+                            <div class="texture-selector">
+                                <h5>Background Themes</h5>
+                                <div class="texture-grid">
+                                    <div class="texture-option selected" data-theme="default" title="Default Grid"></div>
+                                    <div class="texture-option" data-theme="dark" title="Dark Theme"></div>
+                                    <div class="texture-option" data-theme="blueprint" title="Blueprint"></div>
+                                    <div class="texture-option" data-theme="organic" title="Organic"></div>
+                                    <div class="texture-option custom" data-theme="custom" title="Custom Texture Pack">+</div>
+                                </div>
+                                
+                                <div id="customTexturePanel" class="custom-texture-panel" style="display: none;">
+                                    <h5>📸 Custom Background</h5>
+                                    <div class="form-group">
+                                        <label for="backgroundTheme">Interface Theme:</label>
+                                        <select id="backgroundTheme" class="theme-select">
+                                            <option value="light">☀️ Light Theme</option>
+                                            <option value="dark">🌙 Dark Theme</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="backgroundUpload">Upload Background Image:</label>
+                                        <input type="file" id="backgroundUpload" accept="image/*" class="file-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="backgroundOpacity">Background Opacity:</label>
+                                        <input type="range" id="backgroundOpacity" min="0" max="100" value="80" class="opacity-slider">
+                                        <span id="opacityValue">80%</span>
+                                    </div>
+                                    
+                                    <div class="node-icons-header">
+                                        <h5>🎯 Node Icons</h5>
+                                        <button id="toggleNodeIcons" class="toggle-btn">▼</button>
+                                    </div>
+                                    <div id="nodeIconSection" class="node-icon-section">
+                                        <div class="form-group">
+                                            <label>Default Icon for New Nodes:</label>
+                                            <input type="text" id="defaultNodeIcon" value="🔵" placeholder="🔵" class="icon-input">
+                                        </div>
+                                        <div id="individualNodeIcons" class="individual-icons"></div>
+                                    </div>
+                                    
+                                    <div class="texture-pack-management">
+                                        <h5>💾 Texture Pack Management</h5>
+                                        
+                                        <div class="form-group">
+                                            <label for="texturePackName">Pack Name:</label>
+                                            <input type="text" id="texturePackName" placeholder="My Custom Pack" class="pack-name-input">
+                                        </div>
+                                        
+                                        <div class="pack-actions">
+                                            <button id="saveAsTexturePack" class="btn btn-primary">💾 Save As New Pack</button>
+                                            <button id="saveCurrentTexturePack" class="btn btn-success">💾 Update Current Pack</button>
+                                        </div>
+                                        
+                                        <div class="saved-packs-section">
+                                            <h6>📁 Saved Texture Packs</h6>
+                                            <div id="savedTexturePacksList" class="saved-packs-list"></div>
+                                        </div>
+                                        
+                                        <div class="custom-texture-actions">
+                                            <button id="resetCustomTexture" class="btn btn-secondary">🔄 Reset to Defaults</button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
                 
-                <h3>📤 Send Message</h3>
-                <div class="form-group">
-                    <label for="messageSenderSelector">Sender Node:</label>
-                    <select id="messageSenderSelector">
-                        <option value="">-- Select Sender Node --</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="messageTeamSelector">Team:</label>
-                    <select id="messageTeamSelector">
-                        <option value="">-- Select Team --</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="messageInput">Message:</label>
-                    <textarea id="messageInput" placeholder="Type your message here..."></textarea>
-                </div>
-                <button class="btn btn-primary btn-full" onclick="sendBroadcastMessage()" id="sendMessageBtn" disabled>
-                    Send Message
-                </button>
-                
-                <h4>📜 Recent Messages</h4>
-                <div id="recentMessages" class="message-history">
-                    <p style="color: var(--text-secondary); font-style: italic; text-align: center; margin: 1rem 0;">No messages yet</p>
+                <div class="drawer" data-drawer-id="messaging">
+                    <div class="drawer-header expanded">
+                        <div class="drawer-title">
+                            <span class="drawer-icon">💬</span>
+                            <span>Messaging</span>
+                        </div>
+                        <span class="drawer-arrow">▶</span>
+                    </div>
+                    <div class="drawer-content expanded">
+                        <div class="drawer-inner">
+                            <h5>📤 Send Message</h5>
+                            <div class="form-group">
+                                <label for="messageSenderSelector">Sender Node:</label>
+                                <select id="messageSenderSelector">
+                                    <option value="">-- Select Sender Node --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="messageTeamSelector">Team:</label>
+                                <select id="messageTeamSelector">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="messageInput">Message:</label>
+                                <textarea id="messageInput" placeholder="Type your message here..."></textarea>
+                            </div>
+                            <button class="btn btn-primary btn-full" onclick="sendBroadcastMessage()" id="sendMessageBtn" disabled>
+                                Send Message
+                            </button>
+                            
+                            <h5 style="margin-top: 1.5rem;">📜 Recent Messages</h5>
+                            <div id="recentMessages" class="message-history">
+                                <p style="color: var(--text-secondary); font-style: italic; text-align: center; margin: 1rem 0;">No messages yet</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             
@@ -1219,72 +1309,108 @@ async fn serve_basic_html() -> Html<&'static str> {
             <div class="resizer" id="rightResizer"></div>
             
             <div class="panel" id="rightPanel" style="width: 320px; border-left: 1px solid var(--border-color);">
-                <h3>🏢 Team Management</h3>
-                
-                <h4>Create Team</h4>
-                <div class="form-group">
-                    <label for="teamNameInput">Team Name:</label>
-                    <input type="text" id="teamNameInput" placeholder="Enter team name...">
-                </div>
-                <div class="btn-grid">
-                    <select id="nodeSelector" class="form-group">
-                        <option value="">-- Select Node --</option>
-                    </select>
-                    <button onclick="createTeamFromUI()" class="btn btn-primary">Create Team</button>
-                </div>
-                
-                <h4>Join Team</h4>
-                <div class="btn-grid">
-                    <select id="joinNodeSelector" class="form-group">
-                        <option value="">-- Select Node --</option>
-                    </select>
-                    <button onclick="joinTeamFromUI()" class="btn btn-primary">Join Team</button>
-                </div>
-                <div class="form-group">
-                    <select id="availableTeamsSelector">
-                        <option value="">-- Select Team to Join --</option>
-                    </select>
-                </div>
-                
-                <h4>Team Operations</h4>
-                <div class="form-group">
-                    <label for="teamSelector">Active Team:</label>
-                    <select id="teamSelector" onchange="selectTeam()">
-                        <option value="">-- Select Team for Operations --</option>
-                    </select>
-                </div>
-                <p class="no-team-selected" id="selectedTeamInfo">No team selected for sync operations</p>
-                
-                <div class="btn-grid">
-                    <button onclick="addAllNodesToSelectedTeam()" class="btn btn-success btn-full">
-                        Add All Nodes to Team
-                    </button>
-                    <button onclick="autoSyncTeamMembers()" class="btn btn-primary">
-                        Auto-Sync All
-                    </button>
-                    <button onclick="syncAllMembersFromOwner()" class="btn btn-purple">
-                        Owner Sync
-                    </button>
-                    <button onclick="quickTeamSetup()" class="btn btn-warning btn-full">
-                        Quick Team Setup
-                    </button>
+                <div class="drawer" data-drawer-id="team-creation">
+                    <div class="drawer-header expanded">
+                        <div class="drawer-title">
+                            <span class="drawer-icon">🏢</span>
+                            <span>Team Creation</span>
+                        </div>
+                        <span class="drawer-arrow">▶</span>
+                    </div>
+                    <div class="drawer-content expanded">
+                        <div class="drawer-inner">
+                            <h5>Create Team</h5>
+                            <div class="form-group">
+                                <label for="teamNameInput">Team Name:</label>
+                                <input type="text" id="teamNameInput" placeholder="Enter team name...">
+                            </div>
+                            <div class="btn-grid">
+                                <select id="nodeSelector" class="form-group">
+                                    <option value="">-- Select Node --</option>
+                                </select>
+                                <button onclick="createTeamFromUI()" class="btn btn-primary">Create Team</button>
+                            </div>
+                            
+                            <h5 style="margin-top: 1.5rem;">Join Team</h5>
+                            <div class="btn-grid">
+                                <select id="joinNodeSelector" class="form-group">
+                                    <option value="">-- Select Node --</option>
+                                </select>
+                                <button onclick="joinTeamFromUI()" class="btn btn-primary">Join Team</button>
+                            </div>
+                            <div class="form-group">
+                                <select id="availableTeamsSelector">
+                                    <option value="">-- Select Team to Join --</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
-                <div class="role-legend">
-                    <strong>Role Colors:</strong><br>
-                    • <span class="role-color" style="color: #FF5722;">Red</span>: Owner<br>
-                    • <span class="role-color" style="color: #FF9800;">Orange</span>: Admin<br>
-                    • <span class="role-color" style="color: #9C27B0;">Purple</span>: Operator<br>
-                    • <span class="role-color" style="color: #2196F3;">Blue</span>: Member<br>
-                    <br>
-                    <strong>Sync Types:</strong><br>
-                    • <span style="color: var(--primary-color);">Auto-Sync</span>: Full mesh<br>
-                    • <span style="color: #9C27B0;">Owner Sync</span>: Owner → Members<br>
-                    <em>Arrows show data flow direction</em>
+                <div class="drawer" data-drawer-id="team-operations">
+                    <div class="drawer-header expanded">
+                        <div class="drawer-title">
+                            <span class="drawer-icon">⚙️</span>
+                            <span>Team Operations</span>
+                        </div>
+                        <span class="drawer-arrow">▶</span>
+                    </div>
+                    <div class="drawer-content expanded">
+                        <div class="drawer-inner">
+                            <div class="form-group">
+                                <label for="teamSelector">Active Team:</label>
+                                <select id="teamSelector" onchange="selectTeam()">
+                                    <option value="">-- Select Team for Operations --</option>
+                                </select>
+                            </div>
+                            <p class="no-team-selected" id="selectedTeamInfo">No team selected for sync operations</p>
+                            
+                            <div class="btn-grid">
+                                <button onclick="addAllNodesToSelectedTeam()" class="btn btn-success btn-full">
+                                    Add All Nodes to Team
+                                </button>
+                                <button onclick="autoSyncTeamMembers()" class="btn btn-primary">
+                                    Auto-Sync All
+                                </button>
+                                <button onclick="syncAllMembersFromOwner()" class="btn btn-purple">
+                                    Owner Sync
+                                </button>
+                                <button onclick="quickTeamSetup()" class="btn btn-warning btn-full">
+                                    Quick Team Setup
+                                </button>
+                            </div>
+                            
+                            <div class="role-legend" style="margin-top: 1rem;">
+                                <strong>Role Colors:</strong><br>
+                                • <span class="role-color" style="color: #FF5722;">Red</span>: Owner<br>
+                                • <span class="role-color" style="color: #FF9800;">Orange</span>: Admin<br>
+                                • <span class="role-color" style="color: #9C27B0;">Purple</span>: Operator<br>
+                                • <span class="role-color" style="color: #2196F3;">Blue</span>: Member<br>
+                                <br>
+                                <strong>Sync Types:</strong><br>
+                                • <span style="color: var(--primary-color);">Auto-Sync</span>: Full mesh<br>
+                                • <span style="color: #9C27B0;">Owner Sync</span>: Owner → Members<br>
+                                <em>Arrows show data flow direction</em>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
-                <h4>All Teams</h4>
-                <div id="teamsList"></div>
+                <div class="drawer" data-drawer-id="team-overview">
+                    <div class="drawer-header expanded">
+                        <div class="drawer-title">
+                            <span class="drawer-icon">📊</span>
+                            <span>Team Overview</span>
+                        </div>
+                        <span class="drawer-arrow">▶</span>
+                    </div>
+                    <div class="drawer-content expanded">
+                        <div class="drawer-inner">
+                            <h5>All Teams</h5>
+                            <div id="teamsList"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -2165,6 +2291,38 @@ async fn serve_basic_html() -> Html<&'static str> {
             if (savedRightWidth) {
                 rightPanel.style.width = savedRightWidth;
             }
+        }
+        
+        // Drawer functionality
+        function initializeDrawers() {
+            const drawers = document.querySelectorAll('.drawer');
+            
+            drawers.forEach(drawer => {
+                const header = drawer.querySelector('.drawer-header');
+                const content = drawer.querySelector('.drawer-content');
+                
+                // Load saved state from localStorage
+                const drawerId = drawer.dataset.drawerId;
+                const savedState = localStorage.getItem(`drawer-${drawerId}`);
+                if (savedState === 'expanded' || savedState === null) {
+                    header.classList.add('expanded');
+                    content.classList.add('expanded');
+                }
+                
+                header.addEventListener('click', () => {
+                    const isExpanded = header.classList.contains('expanded');
+                    
+                    if (isExpanded) {
+                        header.classList.remove('expanded');
+                        content.classList.remove('expanded');
+                        localStorage.setItem(`drawer-${drawerId}`, 'collapsed');
+                    } else {
+                        header.classList.add('expanded');
+                        content.classList.add('expanded');
+                        localStorage.setItem(`drawer-${drawerId}`, 'expanded');
+                    }
+                });
+            });
         }
         
         let ws = null;
@@ -3875,6 +4033,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         setupCanvasEventListeners();
         initializeTexturePacks();
         initializeResizers();
+        initializeDrawers();
         loadCustomTexturePack();
         loadAllTexturePacks();
         loadPreferences();
