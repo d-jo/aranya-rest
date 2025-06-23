@@ -134,6 +134,48 @@ impl SyncPeers {
         }
         Ok(())
     }
+
+    /// Query all sync peers for a specific graph/team.
+    pub(crate) fn query_sync_peers(&self, graph_id: GraphId) -> Vec<(Addr, SyncPeerConfig)> {
+        self.cfgs
+            .iter()
+            .filter_map(|((addr, gid), cfg)| {
+                if *gid == graph_id {
+                    Some((*addr, cfg.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Query sync peer configuration for a specific peer and graph/team.
+    pub(crate) fn query_sync_peer_config(
+        &self,
+        addr: Addr,
+        graph_id: GraphId,
+    ) -> Option<SyncPeerConfig> {
+        self.cfgs.get(&(addr, graph_id)).cloned()
+    }
+
+    /// Update sync peer configuration.
+    pub(crate) async fn update_sync_peer_config(
+        &mut self,
+        addr: Addr,
+        graph_id: GraphId,
+        config: SyncPeerConfig,
+    ) -> Result<()> {
+        // Check if the peer exists
+        if !self.cfgs.contains_key(&(addr, graph_id)) {
+            return Err(anyhow::anyhow!("Sync peer not found"));
+        }
+
+        // Remove the old peer and add with new config
+        self.remove_peer(addr, graph_id).await?;
+        self.add_peer(addr, graph_id, config).await?;
+
+        Ok(())
+    }
 }
 
 type EffectSender = mpsc::Sender<(GraphId, Vec<EF>)>;

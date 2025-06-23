@@ -100,7 +100,7 @@ pub enum WsMessage {
     TeamCreated { node_id: Uuid, team: TeamInfo },
     TeamJoined { node_id: Uuid, team: TeamInfo },
     TeamLeft { node_id: Uuid, team_id: String },
-    RoleAssigned { node_id: Uuid, team_id: String, role: String },
+    RoleAssigned { node_id: Uuid, team_id: String, target_node_id: Uuid, role: String },
     
     // Message events
     MessageSent { node_id: Uuid, message_id: String, author_id: Uuid, team_id: String, text: String, timestamp: u64 },

@@ -9,6 +9,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tracing;
 
 use crate::{client::DaemonClient, RestError};
 
@@ -55,6 +56,24 @@ pub struct RemoveSyncPeerRequest {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct QuerySyncPeersResponse {
+    pub peers: Vec<SyncPeerInfo>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SyncPeerInfo {
+    pub addr: String,
+    pub config: SyncPeerConfigJson,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct UpdateSyncPeerRequest {
+    pub addr: String,
+    pub team_id: String,
+    pub config: SyncPeerConfigJson,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct CreateTeamRequest {
     pub config: TeamConfigJson,
 }
@@ -94,6 +113,45 @@ pub struct KeyBundleJson {
 pub struct AssignRoleRequest {
     pub device_id: String,
     pub role: String, // "Owner", "Admin", "Operator", "Member"
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct BulkAssignRoleRequest {
+    pub assignments: Vec<RoleAssignment>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RoleAssignment {
+    pub device_id: String,
+    pub role: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct BulkAssignRoleResponse {
+    pub results: Vec<RoleAssignmentResult>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct RoleAssignmentResult {
+    pub device_id: String,
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DeviceRoleInfo {
+    pub device_id: String,
+    pub role: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct QueryAllDeviceRolesResponse {
+    pub devices: Vec<DeviceRoleInfo>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct QueryDevicesByRoleResponse {
+    pub devices: Vec<String>, // device IDs
 }
 
 #[derive(Serialize, Deserialize)]
@@ -654,4 +712,203 @@ pub async fn query_messages(
         .collect();
 
     Ok(Json(message_responses))
+}
+
+pub async fn query_sync_peers(
+    State(client): State<DaemonClient>,
+    Path(team_id): Path<String>,
+) -> Result<Json<QuerySyncPeersResponse>, RestError> {
+    let team_id = parse_team_id(&team_id)?;
+    let peers = client
+        .client()
+        .query_sync_peers(DaemonClient::context(), team_id)
+        .await??;
+
+    let peer_infos: Vec<SyncPeerInfo> = peers
+        .into_iter()
+        .map(|(addr, config)| SyncPeerInfo {
+            addr: addr.to_string(),
+            config: SyncPeerConfigJson {
+                interval_secs: config.interval.as_secs(),
+                sync_now: config.sync_now,
+            },
+        })
+        .collect();
+
+    Ok(Json(QuerySyncPeersResponse { peers: peer_infos }))
+}
+
+pub async fn query_sync_peer_config(
+    State(client): State<DaemonClient>,
+    Path((team_id, addr)): Path<(String, String)>,
+) -> Result<Json<Option<SyncPeerConfigJson>>, RestError> {
+    let team_id = parse_team_id(&team_id)?;
+    let addr = parse_addr(&addr)?;
+    
+    let config = client
+        .client()
+        .query_sync_peer_config(DaemonClient::context(), addr, team_id)
+        .await??;
+
+    let config_json = config.map(|cfg| SyncPeerConfigJson {
+        interval_secs: cfg.interval.as_secs(),
+        sync_now: cfg.sync_now,
+    });
+
+    Ok(Json(config_json))
+}
+
+pub async fn update_sync_peer_config(
+    State(client): State<DaemonClient>,
+    Json(req): Json<UpdateSyncPeerRequest>,
+) -> Result<StatusCode, RestError> {
+    let team_id = parse_team_id(&req.team_id)?;
+    let addr = parse_addr(&req.addr)?;
+    let config = req.config.into();
+
+    client
+        .client()
+        .update_sync_peer_config(DaemonClient::context(), addr, team_id, config)
+        .await??;
+    Ok(StatusCode::OK)
+}
+
+pub async fn bulk_assign_role(
+    State(client): State<DaemonClient>,
+    Path(team_id): Path<String>,
+    Json(req): Json<BulkAssignRoleRequest>,
+) -> Result<Json<BulkAssignRoleResponse>, RestError> {
+    let team_id = parse_team_id(&team_id)?;
+    let mut results = Vec::new();
+
+    for assignment in req.assignments {
+        let device_id_result = parse_device_id(&assignment.device_id);
+        let role_result = parse_role(&assignment.role);
+
+        let result = match (device_id_result, role_result) {
+            (Ok(device_id), Ok(role)) => {
+                match client
+                    .client()
+                    .assign_role(DaemonClient::context(), team_id, device_id, role)
+                    .await
+                {
+                    Ok(_) => RoleAssignmentResult {
+                        device_id: assignment.device_id,
+                        success: true,
+                        error: None,
+                    },
+                    Err(e) => RoleAssignmentResult {
+                        device_id: assignment.device_id,
+                        success: false,
+                        error: Some(format!("Failed to assign role: {}", e)),
+                    },
+                }
+            }
+            (Err(e), _) => RoleAssignmentResult {
+                device_id: assignment.device_id,
+                success: false,
+                error: Some(format!("Invalid device ID: {}", e)),
+            },
+            (_, Err(e)) => RoleAssignmentResult {
+                device_id: assignment.device_id,
+                success: false,
+                error: Some(format!("Invalid role: {}", e)),
+            },
+        };
+
+        results.push(result);
+    }
+
+    Ok(Json(BulkAssignRoleResponse { results }))
+}
+
+pub async fn query_all_device_roles(
+    State(client): State<DaemonClient>,
+    Path(team_id): Path<String>,
+) -> Result<Json<QueryAllDeviceRolesResponse>, RestError> {
+    let team_id = parse_team_id(&team_id)?;
+    
+    // First get all devices on the team
+    let device_ids = client
+        .client()
+        .query_devices_on_team(DaemonClient::context(), team_id)
+        .await??;
+
+    let mut devices = Vec::new();
+    
+    // Then query each device's role
+    for device_id in device_ids {
+        match client
+            .client()
+            .query_device_role(DaemonClient::context(), team_id, device_id)
+            .await
+        {
+            Ok(Ok(role)) => {
+                let role_str = match role {
+                    Role::Owner => "Owner",
+                    Role::Admin => "Admin", 
+                    Role::Operator => "Operator",
+                    Role::Member => "Member",
+                };
+                
+                devices.push(DeviceRoleInfo {
+                    device_id: hex::encode(device_id.into_id().as_bytes()),
+                    role: role_str.to_string(),
+                });
+            }
+            Ok(Err(e)) => {
+                // Log error but continue with other devices
+                tracing::warn!("Failed to query role for device {} (daemon error): {}", hex::encode(device_id.into_id().as_bytes()), e);
+            }
+            Err(e) => {
+                // Log error but continue with other devices
+                tracing::warn!("Failed to query role for device {} (rpc error): {}", hex::encode(device_id.into_id().as_bytes()), e);
+            }
+        }
+    }
+
+    Ok(Json(QueryAllDeviceRolesResponse { devices }))
+}
+
+pub async fn query_devices_by_role(
+    State(client): State<DaemonClient>,
+    Path((team_id, role_str)): Path<(String, String)>,
+) -> Result<Json<QueryDevicesByRoleResponse>, RestError> {
+    let team_id = parse_team_id(&team_id)?;
+    let target_role = parse_role(&role_str)?;
+    
+    // First get all devices on the team
+    let device_ids = client
+        .client()
+        .query_devices_on_team(DaemonClient::context(), team_id)
+        .await??;
+
+    let mut matching_devices = Vec::new();
+    
+    // Filter devices by role
+    for device_id in device_ids {
+        match client
+            .client()
+            .query_device_role(DaemonClient::context(), team_id, device_id)
+            .await
+        {
+            Ok(Ok(role)) => {
+                if role == target_role {
+                    matching_devices.push(hex::encode(device_id.into_id().as_bytes()));
+                }
+            }
+            Ok(Err(e)) => {
+                // Log error but continue with other devices
+                tracing::warn!("Failed to query role for device {} (daemon error): {}", hex::encode(device_id.into_id().as_bytes()), e);
+            }
+            Err(e) => {
+                // Log error but continue with other devices
+                tracing::warn!("Failed to query role for device {} (rpc error): {}", hex::encode(device_id.into_id().as_bytes()), e);
+            }
+        }
+    }
+
+    Ok(Json(QueryDevicesByRoleResponse { 
+        devices: matching_devices 
+    }))
 }

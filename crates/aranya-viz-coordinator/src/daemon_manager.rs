@@ -467,6 +467,79 @@ impl DaemonManager {
 
         Ok(result)
     }
+
+    #[instrument(skip(self))]
+    pub async fn assign_role(&self, acting_node_id: Uuid, team_id: &str, target_node_id: Uuid, role: &str) -> Result<()> {
+        info!("Assigning role '{}' to node {} in team {} via acting node {}", role, target_node_id, team_id, acting_node_id);
+        
+        // Get the acting node's info
+        let acting_node = {
+            let state = self.state.read().await;
+            state.nodes.get(&acting_node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Acting node {} not found", acting_node_id))?
+        };
+
+        // Get the target node's device ID from its REST API
+        let target_device_id = self.get_device_id(target_node_id).await?;
+
+        // Make REST API call to assign role via the acting node
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/api/v1/teams/{}/roles/assign", acting_node.rest_port, team_id);
+        
+        let assign_request = serde_json::json!({
+            "device_id": target_device_id,
+            "role": role
+        });
+
+        let response = client
+            .post(&url)
+            .json(&assign_request)
+            .send()
+            .await
+            .context("Failed to send assign role request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to assign role: {}", error_text);
+        }
+
+        info!("Successfully assigned role '{}' to node {} in team {}", role, target_node_id, team_id);
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    async fn get_device_id(&self, node_id: Uuid) -> Result<String> {
+        let node = {
+            let state = self.state.read().await;
+            state.nodes.get(&node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Node {} not found", node_id))?
+        };
+
+        // Make REST API call to get device ID
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/api/v1/device-id", node.rest_port);
+
+        let response = client
+            .get(&url)
+            .send()
+            .await
+            .context("Failed to get device ID")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to get device ID: {}", error_text);
+        }
+
+        let response_json: serde_json::Value = response.json().await
+            .context("Failed to parse device ID response")?;
+        
+        let device_id = response_json["device_id"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("No device_id in response"))?
+            .to_string();
+
+        Ok(device_id)
+    }
 }
 
 #[derive(Debug, Clone)]

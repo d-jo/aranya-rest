@@ -1149,6 +1149,176 @@ async fn serve_basic_html() -> Html<&'static str> {
                 max-height: 300px;
             }
         }
+        
+        /* Access Control and Sync Configuration Styles */
+        .team-overview {
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin-top: 1rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .roles-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .role-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+        }
+        
+        .role-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+        }
+        
+        .role-badge.owner {
+            background: #8b5cf6;
+        }
+        
+        .role-badge.admin {
+            background: #3b82f6;
+        }
+        
+        .role-badge.operator {
+            background: #10b981;
+        }
+        
+        .role-badge.member {
+            background: #6b7280;
+        }
+        
+        .team-overview {
+            margin-top: 1rem;
+        }
+        
+        .roles-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .role-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.5rem;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+        }
+        
+        .role-item span:first-child {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        
+        .sync-peers-list {
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin-top: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .sync-peer-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            margin-bottom: 0.5rem;
+        }
+        
+        .sync-peer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .sync-peer-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .sync-peer-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .sync-peer-actions .btn {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+        }
+        
+        .btn-danger {
+            background: var(--error-color);
+            color: white;
+            border-color: var(--error-color);
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+            border-color: #dc2626;
+        }
+        
+        .btn-full {
+            width: 100%;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        
+        .status-indicator.active {
+            background: var(--success-color);
+        }
+        
+        .status-indicator.inactive {
+            background: var(--error-color);
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .input-group input {
+            flex: 1;
+        }
+        
+        .input-group .btn {
+            flex-shrink: 0;
+        }
     </style>
 </head>
 <body>
@@ -1279,6 +1449,167 @@ async fn serve_basic_html() -> Html<&'static str> {
                             <div id="recentMessages" class="message-history">
                                 <p style="color: var(--text-secondary); font-style: italic; text-align: center; margin: 1rem 0;">No messages yet</p>
                             </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="drawer" data-drawer-id="access-control">
+                    <div class="drawer-header">
+                        <div class="drawer-title">
+                            <span class="drawer-icon">🔐</span>
+                            <span>Access Control</span>
+                        </div>
+                        <span class="drawer-arrow">▶</span>
+                    </div>
+                    <div class="drawer-content">
+                        <div class="drawer-inner">
+                            <h5>🔄 Role Management</h5>
+                            <div class="form-group">
+                                <label for="roleActingNodeSelector">Acting Node (who assigns):</label>
+                                <select id="roleActingNodeSelector">
+                                    <option value="">-- Select Acting Node --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="roleTargetNodeSelector">Target Node (who gets role):</label>
+                                <select id="roleTargetNodeSelector">
+                                    <option value="">-- Select Target Node --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="roleTeamSelector">Select Team:</label>
+                                <select id="roleTeamSelector">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="newRoleSelector">Assign Role:</label>
+                                <select id="newRoleSelector">
+                                    <option value="">-- Select Role --</option>
+                                    <option value="Owner">👑 Owner</option>
+                                    <option value="Admin">👤 Admin</option>
+                                    <option value="Operator">⚡ Operator</option>
+                                    <option value="Member">👥 Member</option>
+                                </select>
+                            </div>
+                            <div class="btn-grid">
+                                <button onclick="assignRoleFromUI()" class="btn btn-primary" id="assignRoleBtn" disabled>
+                                    Assign Role
+                                </button>
+                                <button onclick="revokeRoleFromUI()" class="btn btn-warning" id="revokeRoleBtn" disabled>
+                                    Revoke Role
+                                </button>
+                            </div>
+                            
+                            <h5 style="margin-top: 1.5rem;">❌ Device Management</h5>
+                            <div class="form-group">
+                                <label for="deviceRemovalNodeSelector">Select Device to Remove:</label>
+                                <select id="deviceRemovalNodeSelector">
+                                    <option value="">-- Select Device --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="deviceRemovalTeamSelector">From Team:</label>
+                                <select id="deviceRemovalTeamSelector">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <button onclick="removeDeviceFromTeamUI()" class="btn btn-danger btn-full" id="removeDeviceBtn" disabled>
+                                🗑️ Remove Device from Team
+                            </button>
+                            
+                            <h5 style="margin-top: 1.5rem;">📊 Team Overview</h5>
+                            <div class="form-group">
+                                <label for="overviewTeamSelector">View Team:</label>
+                                <select id="overviewTeamSelector">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <button onclick="showTeamOverview()" class="btn btn-secondary btn-full" id="teamOverviewBtn" disabled>
+                                📋 Show Team Roles
+                            </button>
+                            <div id="teamOverviewDisplay" class="team-overview" style="display: none;">
+                                <div id="teamRolesList" class="roles-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="drawer" data-drawer-id="sync-config">
+                    <div class="drawer-header">
+                        <div class="drawer-title">
+                            <span class="drawer-icon">🔄</span>
+                            <span>Sync Configuration</span>
+                        </div>
+                        <span class="drawer-arrow">▶</span>
+                    </div>
+                    <div class="drawer-content">
+                        <div class="drawer-inner">
+                            <h5>➕ Add Sync Peer</h5>
+                            <div class="form-group">
+                                <label for="syncPeerNodeSelector">Select Node:</label>
+                                <select id="syncPeerNodeSelector">
+                                    <option value="">-- Select Node --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="syncPeerTeamSelector">Select Team:</label>
+                                <select id="syncPeerTeamSelector">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="syncPeerAddress">Peer Address:</label>
+                                <input type="text" id="syncPeerAddress" placeholder="IP:Port (e.g., 192.168.1.100:8080)">
+                            </div>
+                            <div class="form-group">
+                                <label for="syncInterval">Sync Interval (seconds):</label>
+                                <input type="number" id="syncInterval" min="1" value="60" placeholder="60">
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="syncNowFlag" checked>
+                                    Sync immediately after adding
+                                </label>
+                            </div>
+                            <button onclick="addSyncPeerFromUI()" class="btn btn-primary btn-full" id="addSyncPeerBtn" disabled>
+                                ➕ Add Sync Peer
+                            </button>
+                            
+                            <h5 style="margin-top: 1.5rem;">⚙️ Manage Sync Peers</h5>
+                            <div class="form-group">
+                                <label for="manageSyncTeamSelector">Select Team:</label>
+                                <select id="manageSyncTeamSelector">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <button onclick="loadSyncPeers()" class="btn btn-secondary btn-full" id="loadSyncPeersBtn" disabled>
+                                📋 Load Sync Peers
+                            </button>
+                            <div id="syncPeersList" class="sync-peers-list" style="display: none;">
+                                <div id="syncPeersDisplay"></div>
+                            </div>
+                            
+                            <h5 style="margin-top: 1.5rem;">🔄 Manual Sync</h5>
+                            <div class="form-group">
+                                <label for="manualSyncNodeSelector">Select Node:</label>
+                                <select id="manualSyncNodeSelector">
+                                    <option value="">-- Select Node --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="manualSyncTeamSelector">Select Team:</label>
+                                <select id="manualSyncTeamSelector">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="manualSyncAddress">Peer Address:</label>
+                                <input type="text" id="manualSyncAddress" placeholder="IP:Port">
+                            </div>
+                            <button onclick="triggerManualSync()" class="btn btn-warning btn-full" id="manualSyncBtn" disabled>
+                                🔄 Sync Now
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -2307,6 +2638,13 @@ async fn serve_basic_html() -> Html<&'static str> {
                 if (savedState === 'expanded' || savedState === null) {
                     header.classList.add('expanded');
                     content.classList.add('expanded');
+                    
+                    // Update selectors for initially expanded drawers
+                    if (drawerId === 'access-control') {
+                        setTimeout(() => updateAccessControlSelectors(), 100);
+                    } else if (drawerId === 'sync-config') {
+                        setTimeout(() => updateSyncPeerSelectors(), 100);
+                    }
                 }
                 
                 header.addEventListener('click', () => {
@@ -2320,6 +2658,13 @@ async fn serve_basic_html() -> Html<&'static str> {
                         header.classList.add('expanded');
                         content.classList.add('expanded');
                         localStorage.setItem(`drawer-${drawerId}`, 'expanded');
+                        
+                        // Update selectors when access control or sync config drawers are opened
+                        if (drawerId === 'access-control') {
+                            updateAccessControlSelectors();
+                        } else if (drawerId === 'sync-config') {
+                            updateSyncPeerSelectors();
+                        }
                     }
                 });
             });
@@ -2423,11 +2768,25 @@ async fn serve_basic_html() -> Html<&'static str> {
                     message.connections.forEach(conn => connections.set(`${conn.from}-${conn.to}-${conn.team_id}`, conn));
                     message.teams.forEach(team => teams.set(team.id, team));
                     updateTeamsUI();
+                    // Only update selectors if the access control or sync config drawers are open
+                    if (document.querySelector('[data-drawer-id="access-control"] .drawer-content.expanded')) {
+                        updateAccessControlSelectors();
+                    }
+                    if (document.querySelector('[data-drawer-id="sync-config"] .drawer-content.expanded')) {
+                        updateSyncPeerSelectors();
+                    }
                     draw();
                     break;
                 case 'NodeCreated':
                     nodes.set(message.node.id, message.node);
                     updateNodeSelectors();
+                    // Only update selectors if the drawers are open
+                    if (document.querySelector('[data-drawer-id="access-control"] .drawer-content.expanded')) {
+                        updateAccessControlSelectors();
+                    }
+                    if (document.querySelector('[data-drawer-id="sync-config"] .drawer-content.expanded')) {
+                        updateSyncPeerSelectors();
+                    }
                     // Update individual node icons if custom texture panel is open
                     if (document.getElementById('customTexturePanel').style.display !== 'none') {
                         updateIndividualNodeIcons();
@@ -2498,6 +2857,13 @@ async fn serve_basic_html() -> Html<&'static str> {
                             members: [{ node_id: message.node_id, role: 'Owner' }]
                         });
                         updateTeamsUI();
+                        // Only update selectors if the drawers are open
+                        if (document.querySelector('[data-drawer-id="access-control"] .drawer-content.expanded')) {
+                            updateAccessControlSelectors();
+                        }
+                        if (document.querySelector('[data-drawer-id="sync-config"] .drawer-content.expanded')) {
+                            updateSyncPeerSelectors();
+                        }
                         draw();
                         
                         // Check if this is part of a quick setup
@@ -2594,7 +2960,120 @@ async fn serve_basic_html() -> Html<&'static str> {
                         }
                     }
                     break;
+                case 'RoleAssigned':
+                    console.log('Received RoleAssigned message:', message);
+                    showNotification(`Role ${message.role} assigned to device successfully`, 'success');
+                    // Update the target node with role information
+                    const targetNode = nodes.get(message.target_node_id);
+                    console.log('Target node found:', targetNode);
+                    if (targetNode && targetNode.teams) {
+                        // Find the team in the node's teams array and update the role
+                        const teamIndex = targetNode.teams.findIndex(t => t.id === message.team_id);
+                        console.log('Team index found:', teamIndex, 'for team ID:', message.team_id);
+                        if (teamIndex !== -1) {
+                            console.log('Updating role from', targetNode.teams[teamIndex].role, 'to', message.role);
+                            targetNode.teams[teamIndex].role = message.role;
+                        }
+                    }
+                    draw();
+                    break;
+                case 'RoleRevoked':
+                    showNotification(`Role ${message.role} revoked from device successfully`, 'success');
+                    // Update the target node
+                    const revokedTargetNode = nodes.get(message.target_node_id);
+                    if (revokedTargetNode && revokedTargetNode.teams) {
+                        // Find the team in the node's teams array and update the role
+                        const teamIndex = revokedTargetNode.teams.findIndex(t => t.id === message.team_id);
+                        if (teamIndex !== -1) {
+                            revokedTargetNode.teams[teamIndex].role = 'Member'; // Default role after revocation
+                        }
+                    }
+                    draw();
+                    break;
+                case 'TeamRolesResponse':
+                    displayTeamRoles(message.team_id, message.devices);
+                    break;
+                case 'SyncPeersResponse':
+                    displaySyncPeers(message.team_id, message.peers);
+                    break;
+                case 'Error':
+                    console.error('WebSocket error message:', message);
+                    showNotification(message.message, 'error');
+                    break;
+                default:
+                    console.log('Unhandled WebSocket message type:', message.type, message);
+                    break;
             }
+        }
+
+        // Display functions for responses
+        function displayTeamRoles(teamId, devices) {
+            const display = document.getElementById('teamRolesList');
+            display.innerHTML = '';
+            
+            if (!devices || devices.length === 0) {
+                display.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">No devices in this team</p>';
+                return;
+            }
+            
+            devices.forEach(device => {
+                const roleItem = document.createElement('div');
+                roleItem.className = 'role-item';
+                
+                const deviceName = getNodeName(device.device_id) || device.device_id.substring(0, 8) + '...';
+                const roleBadge = document.createElement('span');
+                roleBadge.className = `role-badge ${device.role.toLowerCase()}`;
+                roleBadge.textContent = device.role;
+                
+                roleItem.innerHTML = `
+                    <span>${deviceName}</span>
+                `;
+                roleItem.appendChild(roleBadge);
+                display.appendChild(roleItem);
+            });
+        }
+        
+        function getNodeName(nodeId) {
+            const node = nodes.get(nodeId);
+            return node ? node.name : null;
+        }
+        
+        function displaySyncPeers(teamId, peers) {
+            const display = document.getElementById('syncPeersDisplay');
+            display.innerHTML = '';
+            
+            if (!peers || peers.length === 0) {
+                display.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">No sync peers configured for this team</p>';
+                return;
+            }
+            
+            peers.forEach(peer => {
+                const peerItem = document.createElement('div');
+                peerItem.className = 'sync-peer-item';
+                
+                peerItem.innerHTML = `
+                    <div class="sync-peer-header">
+                        <span>${peer.address}</span>
+                        <span class="status-indicator ${peer.active ? 'active' : 'inactive'}"></span>
+                    </div>
+                    <div class="sync-peer-info">
+                        <span>Interval: ${peer.interval_secs} seconds</span>
+                        <span>Sync on add: ${peer.sync_now ? 'Yes' : 'No'}</span>
+                    </div>
+                    <div class="sync-peer-actions">
+                        <div class="input-group">
+                            <input type="number" value="${peer.interval_secs}" min="1" placeholder="Interval" id="interval-${peer.address.replace(/[:.]/g, '_')}">
+                            <button class="btn btn-secondary" onclick="updateSyncPeerConfig('${peer.address}', '${teamId}', document.getElementById('interval-${peer.address.replace(/[:.]/g, '_')}').value)">
+                                Update
+                            </button>
+                        </div>
+                        <button class="btn btn-danger" onclick="removeSyncPeer('${peer.address}', '${teamId}')">
+                            Remove
+                        </button>
+                    </div>
+                `;
+                display.appendChild(peerItem);
+            });
         }
 
         // Notification system
@@ -4027,6 +4506,422 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                 sendBroadcastMessage();
             }
         });
+
+        // Access Control event listeners
+        document.getElementById('roleActingNodeSelector').addEventListener('change', updateAccessControlButtonStates);
+        document.getElementById('roleTargetNodeSelector').addEventListener('change', updateAccessControlButtonStates);
+        document.getElementById('roleTeamSelector').addEventListener('change', updateAccessControlButtonStates);
+        document.getElementById('newRoleSelector').addEventListener('change', updateAccessControlButtonStates);
+        
+        document.getElementById('deviceRemovalNodeSelector').addEventListener('change', updateDeviceRemovalButtonState);
+        document.getElementById('deviceRemovalTeamSelector').addEventListener('change', updateDeviceRemovalButtonState);
+        
+        document.getElementById('overviewTeamSelector').addEventListener('change', updateTeamOverviewButtonState);
+        
+        // Sync Peer event listeners
+        document.getElementById('syncPeerNodeSelector').addEventListener('change', updateSyncPeerButtonStates);
+        document.getElementById('syncPeerTeamSelector').addEventListener('change', updateSyncPeerButtonStates);
+        document.getElementById('syncPeerAddress').addEventListener('input', updateSyncPeerButtonStates);
+        document.getElementById('syncInterval').addEventListener('input', updateSyncPeerButtonStates);
+        
+        document.getElementById('manageSyncTeamSelector').addEventListener('change', updateSyncPeerButtonStates);
+        
+        document.getElementById('manualSyncNodeSelector').addEventListener('change', updateSyncPeerButtonStates);
+        document.getElementById('manualSyncTeamSelector').addEventListener('change', updateSyncPeerButtonStates);
+        document.getElementById('manualSyncAddress').addEventListener('input', updateSyncPeerButtonStates);
+
+        // Access Control Functions
+        function assignRoleFromUI() {
+            const actingNodeId = document.getElementById('roleActingNodeSelector').value;
+            const targetNodeId = document.getElementById('roleTargetNodeSelector').value;
+            const teamId = document.getElementById('roleTeamSelector').value;
+            const role = document.getElementById('newRoleSelector').value;
+            
+            if (!actingNodeId || !targetNodeId || !teamId || !role) {
+                showNotification('Please select acting node, target node, team, and role', 'warning');
+                return;
+            }
+            
+            if (actingNodeId === targetNodeId) {
+                showNotification('Acting node and target node cannot be the same', 'warning');
+                return;
+            }
+            
+            const payload = {
+                type: 'AssignRole',
+                node_id: actingNodeId,
+                target_node_id: targetNodeId,
+                team_id: teamId,
+                role: role
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Sending AssignRole message:', payload);
+                ws.send(JSON.stringify(payload));
+                showNotification(`Assigning ${role} role to target node`, 'success');
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        function revokeRoleFromUI() {
+            const actingNodeId = document.getElementById('roleActingNodeSelector').value;
+            const targetNodeId = document.getElementById('roleTargetNodeSelector').value;
+            const teamId = document.getElementById('roleTeamSelector').value;
+            const role = document.getElementById('newRoleSelector').value;
+            
+            if (!actingNodeId || !targetNodeId || !teamId || !role) {
+                showNotification('Please select acting node, target node, team, and role', 'warning');
+                return;
+            }
+            
+            const payload = {
+                type: 'RevokeRole',
+                node_id: actingNodeId,
+                target_node_id: targetNodeId,
+                team_id: teamId,
+                role: role
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(payload));
+                showNotification(`Revoking ${role} role from target node`, 'success');
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        function removeDeviceFromTeamUI() {
+            const nodeId = document.getElementById('deviceRemovalNodeSelector').value;
+            const teamId = document.getElementById('deviceRemovalTeamSelector').value;
+            
+            if (!nodeId || !teamId) {
+                showNotification('Please select device and team', 'warning');
+                return;
+            }
+            
+            if (!confirm('Are you sure you want to remove this device from the team? This action cannot be undone.')) {
+                return;
+            }
+            
+            const payload = {
+                type: 'RemoveDeviceFromTeam',
+                nodeId: nodeId,
+                teamId: teamId
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(payload));
+                showNotification('Removing device from team', 'success');
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        function showTeamOverview() {
+            const teamId = document.getElementById('overviewTeamSelector').value;
+            
+            if (!teamId) {
+                showNotification('Please select a team', 'warning');
+                return;
+            }
+            
+            const payload = {
+                type: 'QueryTeamRoles',
+                teamId: teamId
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(payload));
+                document.getElementById('teamOverviewDisplay').style.display = 'block';
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        // Sync Peer Functions
+        function addSyncPeerFromUI() {
+            const nodeId = document.getElementById('syncPeerNodeSelector').value;
+            const teamId = document.getElementById('syncPeerTeamSelector').value;
+            const address = document.getElementById('syncPeerAddress').value;
+            const interval = parseInt(document.getElementById('syncInterval').value);
+            const syncNow = document.getElementById('syncNowFlag').checked;
+            
+            if (!nodeId || !teamId || !address || !interval) {
+                showNotification('Please fill in all required fields', 'warning');
+                return;
+            }
+            
+            // Basic address validation
+            if (!address.includes(':') || !address.match(/^[a-zA-Z0-9.-]+:\d+$/)) {
+                showNotification('Please enter a valid address (IP:Port)', 'warning');
+                return;
+            }
+            
+            const payload = {
+                type: 'AddSyncPeer',
+                nodeId: nodeId,
+                teamId: teamId,
+                address: address,
+                intervalSecs: interval,
+                syncNow: syncNow
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(payload));
+                showNotification('Adding sync peer', 'success');
+                // Clear the form
+                document.getElementById('syncPeerAddress').value = '';
+                document.getElementById('syncInterval').value = '60';
+                document.getElementById('syncNowFlag').checked = true;
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        function loadSyncPeers() {
+            const teamId = document.getElementById('manageSyncTeamSelector').value;
+            
+            if (!teamId) {
+                showNotification('Please select a team', 'warning');
+                return;
+            }
+            
+            const payload = {
+                type: 'QuerySyncPeers',
+                teamId: teamId
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(payload));
+                document.getElementById('syncPeersList').style.display = 'block';
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        function triggerManualSync() {
+            const nodeId = document.getElementById('manualSyncNodeSelector').value;
+            const teamId = document.getElementById('manualSyncTeamSelector').value;
+            const address = document.getElementById('manualSyncAddress').value;
+            
+            if (!nodeId || !teamId || !address) {
+                showNotification('Please fill in all fields', 'warning');
+                return;
+            }
+            
+            const payload = {
+                type: 'ManualSync',
+                nodeId: nodeId,
+                teamId: teamId,
+                address: address
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(payload));
+                showNotification('Triggering manual sync', 'success');
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        function removeSyncPeer(address, teamId) {
+            const payload = {
+                type: 'RemoveSyncPeer',
+                address: address,
+                teamId: teamId
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(payload));
+                showNotification('Removing sync peer', 'success');
+                // Reload the list
+                loadSyncPeers();
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        function updateSyncPeerConfig(address, teamId, newInterval) {
+            const payload = {
+                type: 'UpdateSyncPeerConfig',
+                address: address,
+                teamId: teamId,
+                intervalSecs: parseInt(newInterval),
+                syncNow: false
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(payload));
+                showNotification('Updating sync peer configuration', 'success');
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        // Update selector validation functions
+        function updateAccessControlButtonStates() {
+            const actingNodeSelected = document.getElementById('roleActingNodeSelector').value;
+            const targetNodeSelected = document.getElementById('roleTargetNodeSelector').value;
+            const teamSelected = document.getElementById('roleTeamSelector').value;
+            const roleSelected = document.getElementById('newRoleSelector').value;
+            
+            const allSelected = actingNodeSelected && targetNodeSelected && teamSelected && roleSelected;
+            const sameNode = actingNodeSelected === targetNodeSelected && actingNodeSelected !== '';
+            
+            document.getElementById('assignRoleBtn').disabled = !allSelected || sameNode;
+            document.getElementById('revokeRoleBtn').disabled = !allSelected || sameNode;
+        }
+        
+        function updateDeviceRemovalButtonState() {
+            const nodeSelected = document.getElementById('deviceRemovalNodeSelector').value;
+            const teamSelected = document.getElementById('deviceRemovalTeamSelector').value;
+            
+            document.getElementById('removeDeviceBtn').disabled = !nodeSelected || !teamSelected;
+        }
+        
+        function updateTeamOverviewButtonState() {
+            const teamSelected = document.getElementById('overviewTeamSelector').value;
+            document.getElementById('teamOverviewBtn').disabled = !teamSelected;
+        }
+        
+        function updateSyncPeerButtonStates() {
+            const nodeSelected = document.getElementById('syncPeerNodeSelector').value;
+            const teamSelected = document.getElementById('syncPeerTeamSelector').value;
+            const addressEntered = document.getElementById('syncPeerAddress').value.trim();
+            const intervalEntered = document.getElementById('syncInterval').value;
+            
+            document.getElementById('addSyncPeerBtn').disabled = !nodeSelected || !teamSelected || !addressEntered || !intervalEntered;
+            
+            const manageSyncTeamSelected = document.getElementById('manageSyncTeamSelector').value;
+            document.getElementById('loadSyncPeersBtn').disabled = !manageSyncTeamSelected;
+            
+            const manualSyncNodeSelected = document.getElementById('manualSyncNodeSelector').value;
+            const manualSyncTeamSelected = document.getElementById('manualSyncTeamSelector').value;
+            const manualSyncAddressEntered = document.getElementById('manualSyncAddress').value.trim();
+            
+            document.getElementById('manualSyncBtn').disabled = !manualSyncNodeSelected || !manualSyncTeamSelected || !manualSyncAddressEntered;
+        }
+        
+        // Update node selectors for new UI elements
+        function updateAccessControlSelectors() {
+            // Role acting node selector
+            const roleActingNodeSelector = document.getElementById('roleActingNodeSelector');
+            const currentActingNodeValue = roleActingNodeSelector.value;
+            roleActingNodeSelector.innerHTML = '<option value="">-- Select Acting Node --</option>';
+            nodes.forEach((node, id) => {
+                if (node.status === 'Running') {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = node.name || `Node ${id.slice(0, 8)}`;
+                    roleActingNodeSelector.appendChild(option);
+                }
+            });
+            if (currentActingNodeValue && nodes.has(currentActingNodeValue)) {
+                roleActingNodeSelector.value = currentActingNodeValue;
+            }
+            
+            // Role target node selector
+            const roleTargetNodeSelector = document.getElementById('roleTargetNodeSelector');
+            const currentTargetNodeValue = roleTargetNodeSelector.value;
+            roleTargetNodeSelector.innerHTML = '<option value="">-- Select Target Node --</option>';
+            nodes.forEach((node, id) => {
+                if (node.status === 'Running') {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = node.name || `Node ${id.slice(0, 8)}`;
+                    roleTargetNodeSelector.appendChild(option);
+                }
+            });
+            if (currentTargetNodeValue && nodes.has(currentTargetNodeValue)) {
+                roleTargetNodeSelector.value = currentTargetNodeValue;
+            }
+            
+            // Device removal selector
+            const deviceRemovalSelector = document.getElementById('deviceRemovalNodeSelector');
+            const currentRemovalNodeValue = deviceRemovalSelector.value;
+            deviceRemovalSelector.innerHTML = '<option value="">-- Select Device --</option>';
+            nodes.forEach((node, id) => {
+                if (node.status === 'Running') {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = node.name || `Node ${id.slice(0, 8)}`;
+                    deviceRemovalSelector.appendChild(option);
+                }
+            });
+            if (currentRemovalNodeValue && nodes.has(currentRemovalNodeValue)) {
+                deviceRemovalSelector.value = currentRemovalNodeValue;
+            }
+            
+            // Team selectors
+            const teamSelectors = [
+                'roleTeamSelector',
+                'deviceRemovalTeamSelector', 
+                'overviewTeamSelector'
+            ];
+            
+            teamSelectors.forEach(selectorId => {
+                const selector = document.getElementById(selectorId);
+                const currentValue = selector.value;
+                selector.innerHTML = '<option value="">-- Select Team --</option>';
+                teams.forEach((team, id) => {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = team.name || `Team ${id.slice(0, 8)}`;
+                    selector.appendChild(option);
+                });
+                if (currentValue && teams.has(currentValue)) {
+                    selector.value = currentValue;
+                }
+            });
+        }
+        
+        function updateSyncPeerSelectors() {
+            // Sync peer node selectors
+            const syncNodeSelectors = [
+                'syncPeerNodeSelector',
+                'manualSyncNodeSelector'
+            ];
+            
+            syncNodeSelectors.forEach(selectorId => {
+                const selector = document.getElementById(selectorId);
+                const currentValue = selector.value;
+                selector.innerHTML = '<option value="">-- Select Node --</option>';
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running') {
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = node.name || `Node ${id.slice(0, 8)}`;
+                        selector.appendChild(option);
+                    }
+                });
+                if (currentValue && nodes.has(currentValue)) {
+                    selector.value = currentValue;
+                }
+            });
+            
+            // Sync peer team selectors
+            const syncTeamSelectors = [
+                'syncPeerTeamSelector',
+                'manageSyncTeamSelector',
+                'manualSyncTeamSelector'
+            ];
+            
+            syncTeamSelectors.forEach(selectorId => {
+                const selector = document.getElementById(selectorId);
+                const currentValue = selector.value;
+                selector.innerHTML = '<option value="">-- Select Team --</option>';
+                teams.forEach((team, id) => {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = team.name || `Team ${id.slice(0, 8)}`;
+                    selector.appendChild(option);
+                });
+                if (currentValue && teams.has(currentValue)) {
+                    selector.value = currentValue;
+                }
+            });
+        }
 
         // Initialize
         initializeCanvas();

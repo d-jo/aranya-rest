@@ -435,6 +435,43 @@ async fn handle_message(
             }
         }
 
+        WsMessage::AssignRole { node_id, team_id, target_node_id, role } => {
+            match daemon_manager.assign_role(node_id, &team_id, target_node_id, &role).await {
+                Ok(_) => {
+                    // Update the target node's role in state
+                    {
+                        let mut state_guard = state.write().await;
+                        if let Some(target_node) = state_guard.nodes.get_mut(&target_node_id) {
+                            // Update the role in the node's teams array
+                            if let Some(team_info) = target_node.teams.iter_mut().find(|t| t.id == team_id) {
+                                team_info.role = Some(role.clone());
+                            }
+                        }
+                        
+                        // Update in global teams structure
+                        if let Some(team) = state_guard.teams.get_mut(&team_id) {
+                            if let Some(member) = team.members.iter_mut().find(|m| m.node_id == target_node_id) {
+                                member.role = role.clone();
+                            }
+                        }
+                    }
+                    
+                    let _ = tx.send(WsMessage::RoleAssigned { 
+                        node_id, 
+                        team_id: team_id.clone(), 
+                        target_node_id,
+                        role: role.clone() 
+                    });
+                }
+                Err(e) => {
+                    error!("Failed to assign role for node {}: {}", target_node_id, e);
+                    let _ = tx.send(WsMessage::Error { 
+                        message: format!("Failed to assign role: {}", e) 
+                    });
+                }
+            }
+        }
+
         WsMessage::GetState => {
             let (nodes, connections, teams) = {
                 let state_guard = state.read().await;
