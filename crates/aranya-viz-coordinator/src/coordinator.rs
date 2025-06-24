@@ -1320,72 +1320,69 @@ async fn serve_basic_html() -> Html<&'static str> {
             flex-shrink: 0;
         }
         
-        /* Tool Arguments Panel */
-        .tool-args-panel {
+        /* Tool Arguments Ribbon */
+        .tool-args-ribbon {
             background: var(--surface-color);
-            border: 1px solid var(--border-color);
-            border-radius: var(--radius-md);
-            margin: 0.5rem;
-            box-shadow: var(--shadow-sm);
-        }
-        
-        .tool-args-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0.5rem 0.75rem;
-            background: var(--background-color);
             border-bottom: 1px solid var(--border-color);
-            border-radius: var(--radius-md) var(--radius-md) 0 0;
-            font-weight: 500;
-            font-size: 0.875rem;
-            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            min-height: 40px;
         }
         
-        .tool-args-content {
-            padding: 0.75rem;
+        .ribbon-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
         }
         
-        .tool-args-section h6 {
-            margin: 0 0 0.75rem 0;
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--text-primary);
+        .ribbon-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0 0.5rem;
+            border-right: 1px solid var(--border-color);
         }
         
-        .tool-args-section .form-group {
-            margin-bottom: 0.5rem;
+        .ribbon-group:last-child {
+            border-right: none;
         }
         
-        .tool-args-section .form-group:last-child {
-            margin-bottom: 0;
-        }
-        
-        .tool-args-section label {
-            font-size: 0.8rem;
-            margin-bottom: 0.25rem;
-        }
-        
-        .tool-args-section input[type="text"],
-        .tool-args-section input[type="number"],
-        .tool-args-section select {
-            font-size: 0.8rem;
-            padding: 0.25rem 0.5rem;
-        }
-        
-        .btn-small {
-            background: none;
-            border: none;
-            color: var(--text-secondary);
-            cursor: pointer;
+        .ribbon-group label {
             font-size: 0.75rem;
-            padding: 0.25rem;
-            border-radius: var(--radius-sm);
+            font-weight: 500;
+            color: var(--text-secondary);
+            white-space: nowrap;
         }
         
-        .btn-small:hover {
-            background: var(--border-color);
+        .ribbon-group input[type="text"],
+        .ribbon-group input[type="number"],
+        .ribbon-group select {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            height: 28px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: var(--surface-color);
+        }
+        
+        .ribbon-group input[type="checkbox"] {
+            margin-right: 0.25rem;
+        }
+        
+        .ribbon-group .checkbox-label {
+            display: flex;
+            align-items: center;
+            font-size: 0.75rem;
             color: var(--text-primary);
+            cursor: pointer;
+        }
+        
+        .ribbon-group span {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
         }
     </style>
 </head>
@@ -1673,63 +1670,62 @@ async fn serve_basic_html() -> Html<&'static str> {
                     </div>
                 </div>
                 
-                <!-- Tool Arguments Panel -->
-                <div id="toolArgsPanel" class="tool-args-panel" style="display: none;">
-                    <div class="tool-args-header">
-                        <span id="toolArgsTitle">Tool Arguments</span>
-                        <button onclick="toggleToolArgs()" class="btn-small">▲</button>
-                    </div>
-                    <div id="toolArgsContent" class="tool-args-content">
-                        <!-- Create Node Arguments -->
-                        <div id="createNodeArgs" class="tool-args-section" style="display: none;">
-                            <h6>Create Node Options</h6>
-                            <div class="form-group">
-                                <label for="createNodeName">Node Name:</label>
-                                <input type="text" id="createNodeName" placeholder="Auto-generated if empty">
-                            </div>
-                            <div class="form-group">
-                                <label for="createNodeIcon">Node Icon:</label>
-                                <input type="text" id="createNodeIcon" placeholder="🔵" maxlength="2">
-                            </div>
-                            <div class="form-group">
-                                <label for="createNodeTeam">Join Team (optional):</label>
-                                <select id="createNodeTeam">
-                                    <option value="">-- No team --</option>
-                                </select>
-                            </div>
+                <!-- Tool Arguments Ribbon -->
+                <div id="toolArgsRibbon" class="tool-args-ribbon" style="display: none;">
+                    <!-- Create Node Arguments -->
+                    <div id="createNodeArgs" class="ribbon-section" style="display: none;">
+                        <div class="ribbon-group">
+                            <label>Name:</label>
+                            <input type="text" id="createNodeName" placeholder="Auto" style="width: 120px;">
                         </div>
-                        
-                        <!-- Connect Nodes Arguments -->
-                        <div id="connectNodesArgs" class="tool-args-section" style="display: none;">
-                            <h6>Connection Options</h6>
-                            <div class="form-group">
-                                <label for="connectTeam">Team:</label>
-                                <select id="connectTeam">
-                                    <option value="">-- Select Team --</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="connectInterval">Sync Interval (seconds):</label>
-                                <input type="number" id="connectInterval" min="1" max="3600" value="5">
-                            </div>
-                            <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="connectBidirectional" checked>
-                                    Bidirectional sync
-                                </label>
-                            </div>
-                            <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="connectRandomInterval">
-                                    Random interval (1-10s)
-                                </label>
-                            </div>
-                            <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="connectSyncNow" checked>
-                                    Sync immediately
-                                </label>
-                            </div>
+                        <div class="ribbon-group">
+                            <label>Icon:</label>
+                            <input type="text" id="createNodeIcon" placeholder="🔵" maxlength="2" style="width: 40px;">
+                        </div>
+                        <div class="ribbon-group">
+                            <label>Join Team:</label>
+                            <select id="createNodeTeam" style="width: 150px;">
+                                <option value="">-- None --</option>
+                            </select>
+                        </div>
+                        <div class="ribbon-group" style="border: none; padding-left: 1rem;">
+                            <span style="font-style: italic; color: var(--text-secondary);">💡 New node will auto-start and join selected team</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Connect Nodes Arguments -->
+                    <div id="connectNodesArgs" class="ribbon-section" style="display: none;">
+                        <div class="ribbon-group">
+                            <label>Team:</label>
+                            <select id="connectTeam" style="width: 150px;">
+                                <option value="">-- Select --</option>
+                            </select>
+                        </div>
+                        <div class="ribbon-group">
+                            <label>Interval:</label>
+                            <input type="number" id="connectInterval" min="1" max="3600" value="5" style="width: 60px;">
+                            <span>s</span>
+                        </div>
+                        <div class="ribbon-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="connectBidirectional" checked>
+                                Bidirectional
+                            </label>
+                        </div>
+                        <div class="ribbon-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="connectRandomInterval">
+                                Random (1-10s)
+                            </label>
+                        </div>
+                        <div class="ribbon-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="connectSyncNow" checked>
+                                Sync now
+                            </label>
+                        </div>
+                        <div class="ribbon-group" style="border: none; padding-left: 1rem;">
+                            <span id="connectHelpText" style="font-style: italic; color: var(--text-secondary);">💡 Both nodes must be in the same team</span>
                         </div>
                     </div>
                 </div>
@@ -3897,9 +3893,9 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             if (tool === 'select') {
                 header.textContent = 'Click and drag to move nodes. Right-click for options.';
             } else if (tool === 'place') {
-                header.textContent = 'Click on empty space to place a new node. Configure options below.';
+                header.textContent = 'Click on empty space to place a new node.';
             } else if (tool === 'connect') {
-                header.textContent = 'Click on receiver node, then click on source node. Configure connection options below.';
+                header.textContent = 'Click on receiver node, then click on source node. Arrow shows data flow direction.';
             }
             
             draw();
@@ -3907,37 +3903,22 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         
         // Tool Arguments Functions
         function showToolArgs(tool) {
-            const panel = document.getElementById('toolArgsPanel');
-            const sections = document.querySelectorAll('.tool-args-section');
+            const ribbon = document.getElementById('toolArgsRibbon');
+            const sections = document.querySelectorAll('.ribbon-section');
             
             // Hide all sections first
             sections.forEach(section => section.style.display = 'none');
             
             if (tool === 'place') {
-                document.getElementById('createNodeArgs').style.display = 'block';
-                document.getElementById('toolArgsTitle').textContent = 'Create Node Options';
-                panel.style.display = 'block';
+                document.getElementById('createNodeArgs').style.display = 'flex';
+                ribbon.style.display = 'flex';
                 updateToolArgsSelectors();
             } else if (tool === 'connect') {
-                document.getElementById('connectNodesArgs').style.display = 'block';
-                document.getElementById('toolArgsTitle').textContent = 'Connection Options';
-                panel.style.display = 'block';
+                document.getElementById('connectNodesArgs').style.display = 'flex';
+                ribbon.style.display = 'flex';
                 updateToolArgsSelectors();
             } else {
-                panel.style.display = 'none';
-            }
-        }
-        
-        function toggleToolArgs() {
-            const content = document.getElementById('toolArgsContent');
-            const button = document.querySelector('.tool-args-header button');
-            
-            if (content.style.display === 'none') {
-                content.style.display = 'block';
-                button.textContent = '▲';
-            } else {
-                content.style.display = 'none';
-                button.textContent = '▼';
+                ribbon.style.display = 'none';
             }
         }
         
