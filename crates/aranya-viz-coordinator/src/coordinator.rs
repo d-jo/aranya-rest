@@ -3615,8 +3615,10 @@ async fn serve_basic_html() -> Html<&'static str> {
         }
 
         // Add all canvas event listeners inside a setup function
+        let canvasEventListenersSetup = false;
         function setupCanvasEventListeners() {
-            if (!canvas) return;
+            if (!canvas || canvasEventListenersSetup) return;
+            canvasEventListenersSetup = true;
             
             canvas.addEventListener('click', function(e) {
                 const rect = canvas.getBoundingClientRect();
