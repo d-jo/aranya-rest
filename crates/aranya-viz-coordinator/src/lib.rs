@@ -73,14 +73,16 @@ pub enum WsMessage {
     CreateNode { name: String, position: Position },
     DeleteNode { node_id: Uuid },
     MoveNode { node_id: Uuid, position: Position },
-    AddSyncConnection { from: Uuid, to: Uuid, team_id: String },
+    AddSyncConnection { from: Uuid, to: Uuid, team_id: String, interval_secs: u32, sync_now: bool },
     RemoveSyncConnection { from: Uuid, to: Uuid, team_id: String },
     
     // Team operations
     CreateTeam { node_id: Uuid, team_name: String },
     JoinTeam { node_id: Uuid, team_id: String, owner_node_id: Uuid },
     LeaveTeam { node_id: Uuid, team_id: String },
+    RemoveDeviceFromTeam { node_id: Uuid, team_id: String },
     AssignRole { node_id: Uuid, team_id: String, target_node_id: Uuid, role: String },
+    RevokeRole { node_id: Uuid, team_id: String, target_node_id: Uuid, role: String },
     
     // Message operations
     SendMessage { node_id: Uuid, team_id: String, message: String },
@@ -100,7 +102,9 @@ pub enum WsMessage {
     TeamCreated { node_id: Uuid, team: TeamInfo },
     TeamJoined { node_id: Uuid, team: TeamInfo },
     TeamLeft { node_id: Uuid, team_id: String },
+    DeviceRemovedFromTeam { node_id: Uuid, team_id: String },
     RoleAssigned { node_id: Uuid, team_id: String, target_node_id: Uuid, role: String },
+    RoleRevoked { node_id: Uuid, team_id: String, target_node_id: Uuid, role: String },
     
     // Message events
     MessageSent { node_id: Uuid, message_id: String, author_id: Uuid, team_id: String, text: String, timestamp: u64 },

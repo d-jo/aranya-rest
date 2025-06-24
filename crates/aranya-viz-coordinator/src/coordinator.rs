@@ -1518,19 +1518,6 @@ async fn serve_basic_html() -> Html<&'static str> {
                                 🗑️ Remove Device from Team
                             </button>
                             
-                            <h5 style="margin-top: 1.5rem;">📊 Team Overview</h5>
-                            <div class="form-group">
-                                <label for="overviewTeamSelector">View Team:</label>
-                                <select id="overviewTeamSelector">
-                                    <option value="">-- Select Team --</option>
-                                </select>
-                            </div>
-                            <button onclick="showTeamOverview()" class="btn btn-secondary btn-full" id="teamOverviewBtn" disabled>
-                                📋 Show Team Roles
-                            </button>
-                            <div id="teamOverviewDisplay" class="team-overview" style="display: none;">
-                                <div id="teamRolesList" class="roles-list"></div>
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -1545,26 +1532,28 @@ async fn serve_basic_html() -> Html<&'static str> {
                     </div>
                     <div class="drawer-content">
                         <div class="drawer-inner">
-                            <h5>➕ Add Sync Peer</h5>
+                            <h5>➕ Add Sync Connection</h5>
                             <div class="form-group">
-                                <label for="syncPeerNodeSelector">Select Node:</label>
-                                <select id="syncPeerNodeSelector">
-                                    <option value="">-- Select Node --</option>
+                                <label for="syncFromNodeSelector">From Node:</label>
+                                <select id="syncFromNodeSelector">
+                                    <option value="">-- Select Source Node --</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="syncPeerTeamSelector">Select Team:</label>
-                                <select id="syncPeerTeamSelector">
+                                <label for="syncToNodeSelector">To Node:</label>
+                                <select id="syncToNodeSelector">
+                                    <option value="">-- Select Target Node --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="syncTeamSelector">Team:</label>
+                                <select id="syncTeamSelector">
                                     <option value="">-- Select Team --</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="syncPeerAddress">Peer Address:</label>
-                                <input type="text" id="syncPeerAddress" placeholder="IP:Port (e.g., 192.168.1.100:8080)">
-                            </div>
-                            <div class="form-group">
                                 <label for="syncInterval">Sync Interval (seconds):</label>
-                                <input type="number" id="syncInterval" min="1" value="60" placeholder="60">
+                                <input type="number" id="syncInterval" min="1" value="5" placeholder="5">
                             </div>
                             <div class="form-group">
                                 <label>
@@ -1572,43 +1561,26 @@ async fn serve_basic_html() -> Html<&'static str> {
                                     Sync immediately after adding
                                 </label>
                             </div>
-                            <button onclick="addSyncPeerFromUI()" class="btn btn-primary btn-full" id="addSyncPeerBtn" disabled>
-                                ➕ Add Sync Peer
-                            </button>
                             
-                            <h5 style="margin-top: 1.5rem;">⚙️ Manage Sync Peers</h5>
                             <div class="form-group">
-                                <label for="manageSyncTeamSelector">Select Team:</label>
-                                <select id="manageSyncTeamSelector">
-                                    <option value="">-- Select Team --</option>
-                                </select>
-                            </div>
-                            <button onclick="loadSyncPeers()" class="btn btn-secondary btn-full" id="loadSyncPeersBtn" disabled>
-                                📋 Load Sync Peers
-                            </button>
-                            <div id="syncPeersList" class="sync-peers-list" style="display: none;">
-                                <div id="syncPeersDisplay"></div>
+                                <label>
+                                    <input type="checkbox" id="advancedMode" onchange="toggleAdvancedMode()">
+                                    Advanced mode (custom URL)
+                                </label>
                             </div>
                             
-                            <h5 style="margin-top: 1.5rem;">🔄 Manual Sync</h5>
-                            <div class="form-group">
-                                <label for="manualSyncNodeSelector">Select Node:</label>
-                                <select id="manualSyncNodeSelector">
-                                    <option value="">-- Select Node --</option>
-                                </select>
+                            <div id="advancedSyncOptions" style="display: none;">
+                                <div class="form-group">
+                                    <label for="customSyncUrl">Custom Peer URL:</label>
+                                    <input type="text" id="customSyncUrl" placeholder="http://192.168.1.100:8080">
+                                    <small style="display: block; color: var(--text-secondary); margin-top: 0.25rem;">
+                                        Use this to sync with nodes outside the visualization
+                                    </small>
+                                </div>
                             </div>
-                            <div class="form-group">
-                                <label for="manualSyncTeamSelector">Select Team:</label>
-                                <select id="manualSyncTeamSelector">
-                                    <option value="">-- Select Team --</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="manualSyncAddress">Peer Address:</label>
-                                <input type="text" id="manualSyncAddress" placeholder="IP:Port">
-                            </div>
-                            <button onclick="triggerManualSync()" class="btn btn-warning btn-full" id="manualSyncBtn" disabled>
-                                🔄 Sync Now
+                            
+                            <button onclick="addSyncConnectionFromUI()" class="btn btn-primary btn-full" id="addSyncBtn" disabled>
+                                ➕ Add Sync Connection
                             </button>
                         </div>
                     </div>
@@ -2643,7 +2615,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                     if (drawerId === 'access-control') {
                         setTimeout(() => updateAccessControlSelectors(), 100);
                     } else if (drawerId === 'sync-config') {
-                        setTimeout(() => updateSyncPeerSelectors(), 100);
+                        setTimeout(() => updateSyncConfigSelectors(), 100);
                     }
                 }
                 
@@ -2663,7 +2635,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                         if (drawerId === 'access-control') {
                             updateAccessControlSelectors();
                         } else if (drawerId === 'sync-config') {
-                            updateSyncPeerSelectors();
+                            updateSyncConfigSelectors();
                         }
                     }
                 });
@@ -2773,7 +2745,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                         updateAccessControlSelectors();
                     }
                     if (document.querySelector('[data-drawer-id="sync-config"] .drawer-content.expanded')) {
-                        updateSyncPeerSelectors();
+                        updateSyncConfigSelectors();
                     }
                     draw();
                     break;
@@ -2785,7 +2757,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                         updateAccessControlSelectors();
                     }
                     if (document.querySelector('[data-drawer-id="sync-config"] .drawer-content.expanded')) {
-                        updateSyncPeerSelectors();
+                        updateSyncConfigSelectors();
                     }
                     // Update individual node icons if custom texture panel is open
                     if (document.getElementById('customTexturePanel').style.display !== 'none') {
@@ -2862,7 +2834,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                             updateAccessControlSelectors();
                         }
                         if (document.querySelector('[data-drawer-id="sync-config"] .drawer-content.expanded')) {
-                            updateSyncPeerSelectors();
+                            updateSyncConfigSelectors();
                         }
                         draw();
                         
@@ -2978,14 +2950,18 @@ async fn serve_basic_html() -> Html<&'static str> {
                     draw();
                     break;
                 case 'RoleRevoked':
-                    showNotification(`Role ${message.role} revoked from device successfully`, 'success');
+                    console.log('Received RoleRevoked message:', message);
+                    showNotification(`Role revoked from device successfully (demoted to Member)`, 'success');
                     // Update the target node
                     const revokedTargetNode = nodes.get(message.target_node_id);
+                    console.log('Revoked target node found:', revokedTargetNode);
                     if (revokedTargetNode && revokedTargetNode.teams) {
                         // Find the team in the node's teams array and update the role
                         const teamIndex = revokedTargetNode.teams.findIndex(t => t.id === message.team_id);
+                        console.log('Team index found for revocation:', teamIndex, 'for team ID:', message.team_id);
                         if (teamIndex !== -1) {
-                            revokedTargetNode.teams[teamIndex].role = 'Member'; // Default role after revocation
+                            console.log('Updating role from', revokedTargetNode.teams[teamIndex].role, 'to Member');
+                            revokedTargetNode.teams[teamIndex].role = 'Member'; // Revocation always demotes to Member
                         }
                     }
                     draw();
@@ -2995,6 +2971,22 @@ async fn serve_basic_html() -> Html<&'static str> {
                     break;
                 case 'SyncPeersResponse':
                     displaySyncPeers(message.team_id, message.peers);
+                    break;
+                case 'DeviceRemovedFromTeam':
+                    console.log('Received DeviceRemovedFromTeam message:', message);
+                    showNotification('Device removed from team successfully', 'success');
+                    // Update the node by removing the team
+                    const removedNode = nodes.get(message.node_id);
+                    console.log('Updating node:', removedNode);
+                    if (removedNode && removedNode.teams) {
+                        const oldTeamsCount = removedNode.teams.length;
+                        removedNode.teams = removedNode.teams.filter(t => t.id !== message.team_id);
+                        console.log('Teams updated from', oldTeamsCount, 'to', removedNode.teams.length);
+                    }
+                    // Update UI
+                    updateTeamsUI();
+                    updateAccessControlSelectors();
+                    draw();
                     break;
                 case 'Error':
                     console.error('WebSocket error message:', message);
@@ -3451,7 +3443,9 @@ async fn serve_basic_html() -> Html<&'static str> {
                             type: 'AddSyncConnection',
                             from: connectStart,
                             to: nodeId,
-                            team_id: selectedTeamId
+                            team_id: selectedTeamId,
+                            interval_secs: 5,
+                            sync_now: true
                         }));
                         connectStart = null;
                     } else {
@@ -4078,7 +4072,9 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                         type: 'AddSyncConnection',
                         from: from,
                         to: to,
-                        team_id: selectedTeamId
+                        team_id: selectedTeamId,
+                        interval_secs: 5,
+                        sync_now: true
                     }));
                 });
                 
@@ -4146,7 +4142,9 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                         type: 'AddSyncConnection',
                         from: memberNode.id,      // Member syncs FROM owner
                         to: ownerNode.id,         // TO the owner
-                        team_id: selectedTeamId
+                        team_id: selectedTeamId,
+                        interval_secs: 5,
+                        sync_now: true
                     }));
                 });
 
@@ -4516,19 +4514,14 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         document.getElementById('deviceRemovalNodeSelector').addEventListener('change', updateDeviceRemovalButtonState);
         document.getElementById('deviceRemovalTeamSelector').addEventListener('change', updateDeviceRemovalButtonState);
         
-        document.getElementById('overviewTeamSelector').addEventListener('change', updateTeamOverviewButtonState);
+        // Removed overviewTeamSelector - Team Overview section was removed
         
         // Sync Peer event listeners
-        document.getElementById('syncPeerNodeSelector').addEventListener('change', updateSyncPeerButtonStates);
-        document.getElementById('syncPeerTeamSelector').addEventListener('change', updateSyncPeerButtonStates);
-        document.getElementById('syncPeerAddress').addEventListener('input', updateSyncPeerButtonStates);
-        document.getElementById('syncInterval').addEventListener('input', updateSyncPeerButtonStates);
-        
-        document.getElementById('manageSyncTeamSelector').addEventListener('change', updateSyncPeerButtonStates);
-        
-        document.getElementById('manualSyncNodeSelector').addEventListener('change', updateSyncPeerButtonStates);
-        document.getElementById('manualSyncTeamSelector').addEventListener('change', updateSyncPeerButtonStates);
-        document.getElementById('manualSyncAddress').addEventListener('input', updateSyncPeerButtonStates);
+        document.getElementById('syncFromNodeSelector').addEventListener('change', updateSyncButtonState);
+        document.getElementById('syncToNodeSelector').addEventListener('change', updateSyncButtonState);
+        document.getElementById('syncTeamSelector').addEventListener('change', updateSyncButtonState);
+        document.getElementById('syncInterval').addEventListener('input', updateSyncButtonState);
+        document.getElementById('customSyncUrl').addEventListener('input', updateSyncButtonState);
 
         // Access Control Functions
         function assignRoleFromUI() {
@@ -4584,6 +4577,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             };
             
             if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Sending RevokeRole message:', payload);
                 ws.send(JSON.stringify(payload));
                 showNotification(`Revoking ${role} role from target node`, 'success');
             } else {
@@ -4606,11 +4600,12 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             
             const payload = {
                 type: 'RemoveDeviceFromTeam',
-                nodeId: nodeId,
-                teamId: teamId
+                node_id: nodeId,
+                team_id: teamId
             };
             
             if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Sending RemoveDeviceFromTeam message:', payload);
                 ws.send(JSON.stringify(payload));
                 showNotification('Removing device from team', 'success');
             } else {
@@ -4618,112 +4613,118 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             }
         }
         
-        function showTeamOverview() {
-            const teamId = document.getElementById('overviewTeamSelector').value;
+        // Removed showTeamOverview - Query Team Roles is not a real endpoint
+        
+        // Sync Configuration Functions
+        function toggleAdvancedMode() {
+            const advancedOptions = document.getElementById('advancedSyncOptions');
+            const isChecked = document.getElementById('advancedMode').checked;
+            advancedOptions.style.display = isChecked ? 'block' : 'none';
             
-            if (!teamId) {
-                showNotification('Please select a team', 'warning');
-                return;
-            }
-            
-            const payload = {
-                type: 'QueryTeamRoles',
-                teamId: teamId
-            };
-            
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify(payload));
-                document.getElementById('teamOverviewDisplay').style.display = 'block';
+            // Clear/update fields based on mode
+            if (isChecked) {
+                document.getElementById('syncToNodeSelector').disabled = true;
+                document.getElementById('syncToNodeSelector').value = '';
             } else {
-                showNotification('WebSocket not connected', 'error');
+                document.getElementById('syncToNodeSelector').disabled = false;
+                document.getElementById('customSyncUrl').value = '';
             }
+            updateSyncButtonState();
         }
         
-        // Sync Peer Functions
-        function addSyncPeerFromUI() {
-            const nodeId = document.getElementById('syncPeerNodeSelector').value;
-            const teamId = document.getElementById('syncPeerTeamSelector').value;
-            const address = document.getElementById('syncPeerAddress').value;
-            const interval = parseInt(document.getElementById('syncInterval').value);
+        function addSyncConnectionFromUI() {
+            const fromNodeId = document.getElementById('syncFromNodeSelector').value;
+            const teamId = document.getElementById('syncTeamSelector').value;
+            const interval = parseInt(document.getElementById('syncInterval').value) || 5;
             const syncNow = document.getElementById('syncNowFlag').checked;
+            const advancedMode = document.getElementById('advancedMode').checked;
             
-            if (!nodeId || !teamId || !address || !interval) {
-                showNotification('Please fill in all required fields', 'warning');
+            if (!fromNodeId || !teamId) {
+                showNotification('Please select source node and team', 'warning');
                 return;
             }
             
-            // Basic address validation
-            if (!address.includes(':') || !address.match(/^[a-zA-Z0-9.-]+:\d+$/)) {
-                showNotification('Please enter a valid address (IP:Port)', 'warning');
-                return;
-            }
-            
-            const payload = {
-                type: 'AddSyncPeer',
-                nodeId: nodeId,
-                teamId: teamId,
-                address: address,
-                intervalSecs: interval,
-                syncNow: syncNow
-            };
-            
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify(payload));
-                showNotification('Adding sync peer', 'success');
-                // Clear the form
-                document.getElementById('syncPeerAddress').value = '';
-                document.getElementById('syncInterval').value = '60';
-                document.getElementById('syncNowFlag').checked = true;
+            if (advancedMode) {
+                // Advanced mode - use custom URL
+                const customUrl = document.getElementById('customSyncUrl').value.trim();
+                if (!customUrl) {
+                    showNotification('Please enter a custom URL', 'warning');
+                    return;
+                }
+                
+                // Extract host and port from URL
+                let address;
+                try {
+                    const url = new URL(customUrl);
+                    address = url.hostname + ':' + (url.port || (url.protocol === 'https:' ? '443' : '80'));
+                } catch (e) {
+                    // Fallback for simple IP:Port format
+                    if (customUrl.includes(':') && customUrl.match(/^[a-zA-Z0-9.-]+:\d+$/)) {
+                        address = customUrl;
+                    } else {
+                        showNotification('Please enter a valid URL or IP:Port', 'warning');
+                        return;
+                    }
+                }
+                
+                // For custom URLs, we'll use the REST API directly
+                // This would need backend support to add external sync peers
+                showNotification('Adding external sync peer: ' + address, 'info');
+                // TODO: Implement backend support for external sync peers
+                
             } else {
-                showNotification('WebSocket not connected', 'error');
+                // Normal mode - sync between visualization nodes
+                const toNodeId = document.getElementById('syncToNodeSelector').value;
+                if (!toNodeId) {
+                    showNotification('Please select target node', 'warning');
+                    return;
+                }
+                
+                if (fromNodeId === toNodeId) {
+                    showNotification('Source and target nodes cannot be the same', 'warning');
+                    return;
+                }
+                
+                // Check if nodes are in the same team
+                const fromNode = nodes.get(fromNodeId);
+                const toNode = nodes.get(toNodeId);
+                
+                if (!fromNode || !toNode) {
+                    showNotification('Selected nodes not found', 'error');
+                    return;
+                }
+                
+                const fromInTeam = fromNode.teams && fromNode.teams.some(t => t.id === teamId);
+                const toInTeam = toNode.teams && toNode.teams.some(t => t.id === teamId);
+                
+                if (!fromInTeam || !toInTeam) {
+                    showNotification('Both nodes must be members of the selected team', 'warning');
+                    return;
+                }
+                
+                // Add sync connection
+                const payload = {
+                    type: 'AddSyncConnection',
+                    from: fromNodeId,
+                    to: toNodeId,
+                    team_id: teamId,
+                    interval_secs: interval,
+                    sync_now: syncNow
+                };
+                
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    console.log('Adding sync connection:', payload);
+                    ws.send(JSON.stringify(payload));
+                    showNotification('Adding sync connection', 'success');
+                } else {
+                    showNotification('WebSocket not connected', 'error');
+                }
             }
         }
         
-        function loadSyncPeers() {
-            const teamId = document.getElementById('manageSyncTeamSelector').value;
-            
-            if (!teamId) {
-                showNotification('Please select a team', 'warning');
-                return;
-            }
-            
-            const payload = {
-                type: 'QuerySyncPeers',
-                teamId: teamId
-            };
-            
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify(payload));
-                document.getElementById('syncPeersList').style.display = 'block';
-            } else {
-                showNotification('WebSocket not connected', 'error');
-            }
-        }
+        // Removed loadSyncPeers function - UI simplified
         
-        function triggerManualSync() {
-            const nodeId = document.getElementById('manualSyncNodeSelector').value;
-            const teamId = document.getElementById('manualSyncTeamSelector').value;
-            const address = document.getElementById('manualSyncAddress').value;
-            
-            if (!nodeId || !teamId || !address) {
-                showNotification('Please fill in all fields', 'warning');
-                return;
-            }
-            
-            const payload = {
-                type: 'ManualSync',
-                nodeId: nodeId,
-                teamId: teamId,
-                address: address
-            };
-            
-            if (ws && ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify(payload));
-                showNotification('Triggering manual sync', 'success');
-            } else {
-                showNotification('WebSocket not connected', 'error');
-            }
-        }
+        // Removed triggerManualSync function - UI simplified
         
         function removeSyncPeer(address, teamId) {
             const payload = {
@@ -4780,27 +4781,26 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             document.getElementById('removeDeviceBtn').disabled = !nodeSelected || !teamSelected;
         }
         
-        function updateTeamOverviewButtonState() {
-            const teamSelected = document.getElementById('overviewTeamSelector').value;
-            document.getElementById('teamOverviewBtn').disabled = !teamSelected;
-        }
+        // Removed updateTeamOverviewButtonState - Team Overview section was removed
         
-        function updateSyncPeerButtonStates() {
-            const nodeSelected = document.getElementById('syncPeerNodeSelector').value;
-            const teamSelected = document.getElementById('syncPeerTeamSelector').value;
-            const addressEntered = document.getElementById('syncPeerAddress').value.trim();
-            const intervalEntered = document.getElementById('syncInterval').value;
+        function updateSyncButtonState() {
+            const fromNodeSelected = document.getElementById('syncFromNodeSelector').value;
+            const teamSelected = document.getElementById('syncTeamSelector').value;
+            const advancedMode = document.getElementById('advancedMode').checked;
+            const toNodeSelected = document.getElementById('syncToNodeSelector').value;
+            const customUrlEntered = document.getElementById('customSyncUrl').value.trim();
             
-            document.getElementById('addSyncPeerBtn').disabled = !nodeSelected || !teamSelected || !addressEntered || !intervalEntered;
+            let isValid = false;
             
-            const manageSyncTeamSelected = document.getElementById('manageSyncTeamSelector').value;
-            document.getElementById('loadSyncPeersBtn').disabled = !manageSyncTeamSelected;
+            if (fromNodeSelected && teamSelected) {
+                if (advancedMode) {
+                    isValid = customUrlEntered.length > 0;
+                } else {
+                    isValid = toNodeSelected.length > 0 && fromNodeSelected !== toNodeSelected;
+                }
+            }
             
-            const manualSyncNodeSelected = document.getElementById('manualSyncNodeSelector').value;
-            const manualSyncTeamSelected = document.getElementById('manualSyncTeamSelector').value;
-            const manualSyncAddressEntered = document.getElementById('manualSyncAddress').value.trim();
-            
-            document.getElementById('manualSyncBtn').disabled = !manualSyncNodeSelected || !manualSyncTeamSelected || !manualSyncAddressEntered;
+            document.getElementById('addSyncBtn').disabled = !isValid;
         }
         
         // Update node selectors for new UI elements
@@ -4856,8 +4856,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             // Team selectors
             const teamSelectors = [
                 'roleTeamSelector',
-                'deviceRemovalTeamSelector', 
-                'overviewTeamSelector'
+                'deviceRemovalTeamSelector'
             ];
             
             teamSelectors.forEach(selectorId => {
@@ -4876,51 +4875,54 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             });
         }
         
-        function updateSyncPeerSelectors() {
-            // Sync peer node selectors
-            const syncNodeSelectors = [
-                'syncPeerNodeSelector',
-                'manualSyncNodeSelector'
-            ];
-            
-            syncNodeSelectors.forEach(selectorId => {
-                const selector = document.getElementById(selectorId);
-                const currentValue = selector.value;
-                selector.innerHTML = '<option value="">-- Select Node --</option>';
-                nodes.forEach((node, id) => {
-                    if (node.status === 'Running') {
-                        const option = document.createElement('option');
-                        option.value = id;
-                        option.textContent = node.name || `Node ${id.slice(0, 8)}`;
-                        selector.appendChild(option);
-                    }
-                });
-                if (currentValue && nodes.has(currentValue)) {
-                    selector.value = currentValue;
-                }
-            });
-            
-            // Sync peer team selectors
-            const syncTeamSelectors = [
-                'syncPeerTeamSelector',
-                'manageSyncTeamSelector',
-                'manualSyncTeamSelector'
-            ];
-            
-            syncTeamSelectors.forEach(selectorId => {
-                const selector = document.getElementById(selectorId);
-                const currentValue = selector.value;
-                selector.innerHTML = '<option value="">-- Select Team --</option>';
-                teams.forEach((team, id) => {
+        function updateSyncConfigSelectors() {
+            // From node selector
+            const syncFromNodeSelector = document.getElementById('syncFromNodeSelector');
+            const currentFromValue = syncFromNodeSelector.value;
+            syncFromNodeSelector.innerHTML = '<option value="">-- Select Source Node --</option>';
+            nodes.forEach((node, id) => {
+                if (node.status === 'Running') {
                     const option = document.createElement('option');
                     option.value = id;
-                    option.textContent = team.name || `Team ${id.slice(0, 8)}`;
-                    selector.appendChild(option);
-                });
-                if (currentValue && teams.has(currentValue)) {
-                    selector.value = currentValue;
+                    option.textContent = node.name || `Node ${id.slice(0, 8)}`;
+                    syncFromNodeSelector.appendChild(option);
                 }
             });
+            if (currentFromValue && nodes.has(currentFromValue)) {
+                syncFromNodeSelector.value = currentFromValue;
+            }
+            
+            // To node selector  
+            const syncToNodeSelector = document.getElementById('syncToNodeSelector');
+            const currentToValue = syncToNodeSelector.value;
+            syncToNodeSelector.innerHTML = '<option value="">-- Select Target Node --</option>';
+            nodes.forEach((node, id) => {
+                if (node.status === 'Running') {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = node.name || `Node ${id.slice(0, 8)}`;
+                    syncToNodeSelector.appendChild(option);
+                }
+            });
+            if (currentToValue && nodes.has(currentToValue)) {
+                syncToNodeSelector.value = currentToValue;
+            }
+            
+            // Team selector
+            const syncTeamSelector = document.getElementById('syncTeamSelector');
+            const currentTeamValue = syncTeamSelector.value;
+            syncTeamSelector.innerHTML = '<option value="">-- Select Team --</option>';
+            teams.forEach((team, id) => {
+                const option = document.createElement('option');
+                option.value = id;
+                option.textContent = team.name || `Team ${id.slice(0, 8)}`;
+                syncTeamSelector.appendChild(option);
+            });
+            if (currentTeamValue && teams.has(currentTeamValue)) {
+                syncTeamSelector.value = currentTeamValue;
+            }
+            
+            updateSyncButtonState();
         }
 
         // Initialize

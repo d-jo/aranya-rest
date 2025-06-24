@@ -299,8 +299,8 @@ impl DaemonManager {
     }
 
     #[instrument(skip(self))]
-    pub async fn configure_sync_peer(&self, from_node_id: Uuid, to_node_id: Uuid, team_id: &str) -> Result<()> {
-        info!("Configuring sync peer from {} to {}", from_node_id, to_node_id);
+    pub async fn configure_sync_peer(&self, from_node_id: Uuid, to_node_id: Uuid, team_id: &str, interval_secs: u32, sync_now: bool) -> Result<()> {
+        info!("Configuring sync peer from {} to {} with interval {}s", from_node_id, to_node_id, interval_secs);
         
         // Get the nodes' info
         let (from_node, to_node) = {
@@ -316,13 +316,13 @@ impl DaemonManager {
         let client = reqwest::Client::new();
         let url = format!("http://127.0.0.1:{}{}", from_node.rest_port, SYNC_PEER_ENDPOINT);
         
-        // Create sync peer request using the actual team ID
+        // Create sync peer request using the actual team ID and provided config
         let sync_peer_request = serde_json::json!({
             "addr": format!("127.0.0.1:{}", to_node.daemon_port),
             "team_id": team_id,
             "config": {
-                "interval_secs": 1,
-                "sync_now": true
+                "interval_secs": interval_secs,
+                "sync_now": sync_now
             }
         });
 
@@ -539,6 +539,86 @@ impl DaemonManager {
             .to_string();
 
         Ok(device_id)
+    }
+
+    #[instrument(skip(self))]
+    pub async fn remove_device_from_team(&self, node_id: Uuid, team_id: &str) -> Result<()> {
+        info!("Removing device {} from team {}", node_id, team_id);
+        
+        // Get the device ID from the node
+        let device_id = self.get_device_id(node_id).await?;
+
+        // Find a team owner or admin node to perform the removal
+        let owner_node = {
+            let state = self.state.read().await;
+            state.teams.get(team_id)
+                .map(|team| team.owner_node_id)
+                .ok_or_else(|| anyhow::anyhow!("Team {} not found", team_id))?
+        };
+
+        let owner_node_info = {
+            let state = self.state.read().await;
+            state.nodes.get(&owner_node)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("Owner node {} not found", owner_node))?
+        };
+
+        // Make REST API call to remove device from team via the owner node
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/api/v1/teams/{}/devices/{}", owner_node_info.rest_port, team_id, device_id);
+
+        let response = client
+            .delete(&url)
+            .send()
+            .await
+            .context("Failed to send remove device request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to remove device from team: {}", error_text);
+        }
+
+        info!("Successfully removed device {} from team {}", node_id, team_id);
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    pub async fn revoke_role(&self, acting_node_id: Uuid, team_id: &str, target_node_id: Uuid, role: &str) -> Result<()> {
+        info!("Revoking role '{}' from node {} in team {} via acting node {}", role, target_node_id, team_id, acting_node_id);
+        
+        // Get the acting node's info
+        let acting_node = {
+            let state = self.state.read().await;
+            state.nodes.get(&acting_node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Acting node {} not found", acting_node_id))?
+        };
+
+        // Get the target node's device ID from its REST API
+        let target_device_id = self.get_device_id(target_node_id).await?;
+
+        // Make REST API call to revoke role via the acting node
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/api/v1/teams/{}/roles/revoke", acting_node.rest_port, team_id);
+        
+        let revoke_request = serde_json::json!({
+            "device_id": target_device_id,
+            "role": role
+        });
+
+        let response = client
+            .post(&url)
+            .json(&revoke_request)
+            .send()
+            .await
+            .context("Failed to send revoke role request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to revoke role: {}", error_text);
+        }
+
+        info!("Successfully revoked role '{}' from node {} in team {} (demoted to Member)", role, target_node_id, team_id);
+        Ok(())
     }
 }
 
