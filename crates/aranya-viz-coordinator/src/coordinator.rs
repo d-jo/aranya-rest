@@ -1491,15 +1491,15 @@ async fn serve_basic_html() -> Html<&'static str> {
                         <div class="drawer-inner">
                             <h5>📤 Send Message</h5>
                             <div class="form-group">
-                                <label for="messageSenderSelector">Sender Node:</label>
-                                <select id="messageSenderSelector">
-                                    <option value="">-- Select Sender Node --</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
                                 <label for="messageTeamSelector">Team:</label>
                                 <select id="messageTeamSelector">
                                     <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="messageSenderSelector">Sender Node:</label>
+                                <select id="messageSenderSelector">
+                                    <option value="">-- Select Sender Node --</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -1530,6 +1530,12 @@ async fn serve_basic_html() -> Html<&'static str> {
                         <div class="drawer-inner">
                             <h5>🔄 Role Management</h5>
                             <div class="form-group">
+                                <label for="roleTeamSelector">Select Team:</label>
+                                <select id="roleTeamSelector">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
                                 <label for="roleActingNodeSelector">Acting Node (who assigns):</label>
                                 <select id="roleActingNodeSelector">
                                     <option value="">-- Select Acting Node --</option>
@@ -1539,12 +1545,6 @@ async fn serve_basic_html() -> Html<&'static str> {
                                 <label for="roleTargetNodeSelector">Target Node (who gets role):</label>
                                 <select id="roleTargetNodeSelector">
                                     <option value="">-- Select Target Node --</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="roleTeamSelector">Select Team:</label>
-                                <select id="roleTeamSelector">
-                                    <option value="">-- Select Team --</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -1568,15 +1568,15 @@ async fn serve_basic_html() -> Html<&'static str> {
                             
                             <h5 style="margin-top: 1.5rem;">❌ Device Management</h5>
                             <div class="form-group">
-                                <label for="deviceRemovalNodeSelector">Select Device to Remove:</label>
-                                <select id="deviceRemovalNodeSelector">
-                                    <option value="">-- Select Device --</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
                                 <label for="deviceRemovalTeamSelector">From Team:</label>
                                 <select id="deviceRemovalTeamSelector">
                                     <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="deviceRemovalNodeSelector">Select Device to Remove:</label>
+                                <select id="deviceRemovalNodeSelector">
+                                    <option value="">-- Select Device --</option>
                                 </select>
                             </div>
                             <button onclick="removeDeviceFromTeamUI()" class="btn btn-danger btn-full" id="removeDeviceBtn" disabled>
@@ -1599,6 +1599,12 @@ async fn serve_basic_html() -> Html<&'static str> {
                         <div class="drawer-inner">
                             <h5>➕ Add Sync Connection</h5>
                             <div class="form-group">
+                                <label for="syncTeamSelector">Team:</label>
+                                <select id="syncTeamSelector">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
                                 <label for="syncFromNodeSelector">From Node:</label>
                                 <select id="syncFromNodeSelector">
                                     <option value="">-- Select Source Node --</option>
@@ -1608,12 +1614,6 @@ async fn serve_basic_html() -> Html<&'static str> {
                                 <label for="syncToNodeSelector">To Node:</label>
                                 <select id="syncToNodeSelector">
                                     <option value="">-- Select Target Node --</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label for="syncTeamSelector">Team:</label>
-                                <select id="syncTeamSelector">
-                                    <option value="">-- Select Team --</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -1675,18 +1675,18 @@ async fn serve_basic_html() -> Html<&'static str> {
                     <!-- Create Node Arguments -->
                     <div id="createNodeArgs" class="ribbon-section" style="display: none;">
                         <div class="ribbon-group">
+                            <label>Join Team:</label>
+                            <select id="createNodeTeam" style="width: 150px;">
+                                <option value="">-- None --</option>
+                            </select>
+                        </div>
+                        <div class="ribbon-group">
                             <label>Name:</label>
                             <input type="text" id="createNodeName" placeholder="Auto" style="width: 120px;">
                         </div>
                         <div class="ribbon-group">
                             <label>Icon:</label>
                             <input type="text" id="createNodeIcon" placeholder="🔵" maxlength="2" style="width: 40px;">
-                        </div>
-                        <div class="ribbon-group">
-                            <label>Join Team:</label>
-                            <select id="createNodeTeam" style="width: 150px;">
-                                <option value="">-- None --</option>
-                            </select>
                         </div>
                         <div class="ribbon-group" style="border: none; padding-left: 1rem;">
                             <span style="font-style: italic; color: var(--text-secondary);">💡 New node will auto-start and join selected team</span>
@@ -1761,16 +1761,16 @@ async fn serve_basic_html() -> Html<&'static str> {
                             </div>
                             
                             <h5 style="margin-top: 1.5rem;">Join Team</h5>
+                            <div class="form-group">
+                                <select id="availableTeamsSelector">
+                                    <option value="">-- Select Team to Join --</option>
+                                </select>
+                            </div>
                             <div class="btn-grid">
                                 <select id="joinNodeSelector" class="form-group">
                                     <option value="">-- Select Node --</option>
                                 </select>
                                 <button onclick="joinTeamFromUI()" class="btn btn-primary">Join Team</button>
-                            </div>
-                            <div class="form-group">
-                                <select id="availableTeamsSelector">
-                                    <option value="">-- Select Team to Join --</option>
-                                </select>
                             </div>
                         </div>
                     </div>
