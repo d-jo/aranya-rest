@@ -1725,7 +1725,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                             </label>
                         </div>
                         <div class="ribbon-group" style="border: none; padding-left: 1rem;">
-                            <span id="connectHelpText" style="font-style: italic; color: var(--text-secondary);">💡 Both nodes must be in the same team</span>
+                            <span id="connectHelpText" style="font-style: italic; color: var(--text-secondary);">💡 Hold Shift+Drag to connect multiple nodes</span>
                         </div>
                     </div>
                 </div>
@@ -2813,6 +2813,13 @@ async fn serve_basic_html() -> Html<&'static str> {
         let connectStart = null;
         let mousePos = { x: 0, y: 0 };
         let selectedTeamId = null;
+        
+        // Multi-connect state variables
+        let isMultiConnecting = false;
+        let multiConnectOrigin = null;
+        let multiConnectTargets = []; // Array to preserve order of highlighted nodes
+        let multiConnectPath = [];
+        let shiftPressed = false;
         let recentMessages = [];
         let messageBubbles = new Map();
         let messagePollingInterval = null;
@@ -3339,6 +3346,64 @@ async fn serve_basic_html() -> Html<&'static str> {
                 drawNode(node);
             });
             
+            // Draw multi-connect visual feedback
+            if (isMultiConnecting && multiConnectOrigin) {
+                ctx.save();
+                
+                // Draw path
+                if (multiConnectPath.length > 1) {
+                    ctx.strokeStyle = '#FF6B35';
+                    ctx.lineWidth = 3;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    ctx.moveTo(multiConnectPath[0].x, multiConnectPath[0].y);
+                    for (let i = 1; i < multiConnectPath.length; i++) {
+                        ctx.lineTo(multiConnectPath[i].x, multiConnectPath[i].y);
+                    }
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+                
+                // Highlight origin node
+                const originNode = nodes.get(multiConnectOrigin);
+                if (originNode) {
+                    ctx.strokeStyle = '#FF6B35';
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(originNode.position.x, originNode.position.y, 35, 0, 2 * Math.PI);
+                    ctx.stroke();
+                }
+                
+                // Highlight target nodes
+                multiConnectTargets.forEach(targetId => {
+                    const targetNode = nodes.get(targetId);
+                    if (targetNode) {
+                        ctx.strokeStyle = '#4CAF50';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.arc(targetNode.position.x, targetNode.position.y, 35, 0, 2 * Math.PI);
+                        ctx.stroke();
+                    }
+                });
+                
+                // Draw connection preview lines
+                multiConnectTargets.forEach(targetId => {
+                    const targetNode = nodes.get(targetId);
+                    if (targetNode && originNode) {
+                        ctx.strokeStyle = '#4CAF50';
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([2, 3]);
+                        ctx.beginPath();
+                        ctx.moveTo(originNode.position.x, originNode.position.y);
+                        ctx.lineTo(targetNode.position.x, targetNode.position.y);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
+                });
+                
+                ctx.restore();
+            }
+            
             // Restore context
             ctx.restore();
             
@@ -3678,6 +3743,20 @@ async fn serve_basic_html() -> Html<&'static str> {
                     lastPanY = e.clientY;
                     canvas.style.cursor = 'grabbing';
                 }
+            } else if (currentTool === 'connect' && shiftPressed && e.button === 0) {
+                // Start multi-connect mode using connectStart as origin
+                const nodeId = getNodeAt(x, y);
+                if (nodeId && connectStart && connectStart !== nodeId) {
+                    startMultiConnect(connectStart); // Use connectStart as origin
+                    // Add the shift-clicked node as first target
+                    multiConnectTargets.push(nodeId);
+                    console.log('Added first target to multi-connect path:', getNodeName(nodeId) || nodeId.substring(0,8));
+                    // Clear connectStart to prevent regular connect logic from interfering
+                    connectStart = null;
+                    e.preventDefault(); // Prevent default click behavior
+                } else if (!connectStart) {
+                    showNotification('Click on a node first to set the connection origin', 'warning');
+                }
             }
         });
 
@@ -3710,6 +3789,10 @@ async fn serve_basic_html() -> Html<&'static str> {
                     node_id: dragNode,
                     position: { x: clampedX, y: clampedY }
                 }));
+            } else if (isMultiConnecting && e.buttons === 1) {
+                // Handle multi-connect path tracking
+                addToMultiConnectPath(mousePos.x, mousePos.y);
+                draw(); // Redraw to show visual feedback
             }
             
             // Update canvas cursor
@@ -3722,7 +3805,13 @@ async fn serve_basic_html() -> Html<&'static str> {
             } else if (currentTool === 'place') {
                 canvas.style.cursor = 'crosshair';
             } else if (currentTool === 'connect') {
-                canvas.style.cursor = getNodeAt(x, y) ? 'pointer' : 'crosshair';
+                if (isMultiConnecting) {
+                    canvas.style.cursor = 'crosshair';
+                } else if (shiftPressed) {
+                    canvas.style.cursor = getNodeAt(x, y) ? 'copy' : 'crosshair';
+                } else {
+                    canvas.style.cursor = getNodeAt(x, y) ? 'pointer' : 'crosshair';
+                }
             }
             
             // Redraw if we're in connect mode to show preview line
@@ -3736,6 +3825,9 @@ async fn serve_basic_html() -> Html<&'static str> {
             isPanning = false;
             if (currentTool === 'select') {
                 canvas.style.cursor = 'grab';
+            } else if (isMultiConnecting) {
+                // Finish multi-connect
+                finishMultiConnect();
             }
         });
 
@@ -5199,7 +5291,162 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             
             updateSyncButtonState();
         }
+        
+        // Multi-connect helper functions
+        function startMultiConnect(originNodeId) {
+            isMultiConnecting = true;
+            multiConnectOrigin = originNodeId;
+            multiConnectTargets = []; // Reset array
+            multiConnectPath = [];
+            console.log('Started multi-connect from node:', originNodeId);
+        }
+        
+        function addToMultiConnectPath(x, y) {
+            multiConnectPath.push({ x, y });
+            
+            // Check for nodes along the path with a tolerance radius (world coordinates)
+            const DETECTION_RADIUS = 100 / viewportScale; // Much larger radius for better detection
+            
+            console.log(`Checking position (${x.toFixed(1)}, ${y.toFixed(1)}) with radius ${DETECTION_RADIUS.toFixed(1)}`);
+            
+            nodes.forEach((node, nodeId) => {
+                if (nodeId === multiConnectOrigin) return; // Skip origin node
+                if (multiConnectTargets.includes(nodeId)) return; // Skip already added nodes
+                
+                const distance = Math.sqrt(Math.pow(x - node.position.x, 2) + Math.pow(y - node.position.y, 2));
+                console.log(`  Node ${getNodeName(nodeId) || nodeId.substring(0,8)} at (${node.position.x.toFixed(1)}, ${node.position.y.toFixed(1)}) - distance: ${distance.toFixed(1)}`);
+                
+                if (distance <= DETECTION_RADIUS) {
+                    multiConnectTargets.push(nodeId);
+                    console.log('✓ Added node to multi-connect path:', getNodeName(nodeId) || nodeId.substring(0,8), 'at position', x.toFixed(1), y.toFixed(1));
+                }
+            });
+        }
+        
+        function finishMultiConnect() {
+            if (!isMultiConnecting || !multiConnectOrigin) return;
+            
+            const connectTeamId = document.getElementById('connectTeam').value;
+            let interval = parseInt(document.getElementById('connectInterval').value) || 5;
+            const bidirectional = document.getElementById('connectBidirectional').checked;
+            const randomInterval = document.getElementById('connectRandomInterval').checked;
+            const syncNow = document.getElementById('connectSyncNow').checked;
+            
+            // Use tool args team or fallback to selected team
+            const teamId = connectTeamId || selectedTeamId;
+            if (!teamId) {
+                showNotification('Please select a team in the connection options or main team selector!', 'warning');
+                cancelMultiConnect();
+                return;
+            }
+            
+            // Create sequential path: origin+highlighted = [A,B,C,D] -> A→B, B→C, C→D
+            const allNodes = [multiConnectOrigin, ...multiConnectTargets];
+            
+            console.log('Multi-connect debug:');
+            console.log('Origin:', multiConnectOrigin);
+            console.log('Targets:', multiConnectTargets);
+            console.log('All nodes:', allNodes);
+            
+            if (allNodes.length < 2) {
+                showNotification('Need at least 2 nodes to create connections!', 'warning');
+                cancelMultiConnect();
+                return;
+            }
+            
+            let connectionCount = 0;
+            
+            // Create sequential connections: (0→1), (1→2), (2→3), etc.
+            console.log(`Creating ${allNodes.length - 1} connections for ${allNodes.length} nodes`);
+            console.log('Loop bounds: i < ' + (allNodes.length - 1));
+            for (let i = 0; i < allNodes.length - 1; i++) {
+                const fromNodeId = allNodes[i];
+                const toNodeId = allNodes[i + 1];
+                console.log(`Loop iteration ${i}: Connection ${i + 1}: ${getNodeName(fromNodeId) || fromNodeId.substring(0,8)} → ${getNodeName(toNodeId) || toNodeId.substring(0,8)}`);
+                console.log(`  From index ${i}: ${fromNodeId.substring(0,8)}`);
+                console.log(`  To index ${i + 1}: ${toNodeId.substring(0,8)}`);
+                
+                // Validate nodes exist and are in the same team
+                const fromNode = nodes.get(fromNodeId);
+                const toNode = nodes.get(toNodeId);
+                
+                if (!fromNode || !toNode) continue;
+                
+                const fromInTeam = fromNode.teams && fromNode.teams.some(t => t.id === teamId);
+                const toInTeam = toNode.teams && toNode.teams.some(t => t.id === teamId);
+                
+                if (!fromInTeam || !toInTeam) continue; // Skip if not in same team
+                
+                // Apply random interval if selected
+                const currentInterval = randomInterval ? Math.floor(Math.random() * 10) + 1 : interval;
+                
+                // Create primary connection (from → to)
+                ws.send(JSON.stringify({
+                    type: 'AddSyncConnection',
+                    from: fromNodeId,
+                    to: toNodeId,
+                    team_id: teamId,
+                    interval_secs: currentInterval,
+                    sync_now: syncNow
+                }));
+                connectionCount++;
+                
+                // Create reverse connection if bidirectional (to → from)
+                if (bidirectional) {
+                    const reverseInterval = randomInterval ? Math.floor(Math.random() * 10) + 1 : currentInterval;
+                    ws.send(JSON.stringify({
+                        type: 'AddSyncConnection',
+                        from: toNodeId,
+                        to: fromNodeId,
+                        team_id: teamId,
+                        interval_secs: reverseInterval,
+                        sync_now: syncNow
+                    }));
+                    connectionCount++;
+                }
+            }
+            
+            if (connectionCount > 0) {
+                const direction = bidirectional ? 'bidirectional' : 'unidirectional';
+                showNotification(`Created ${connectionCount} ${direction} path connections between ${allNodes.length} nodes`, 'success');
+            } else {
+                showNotification('No valid connections created. Ensure nodes are in the same team.', 'warning');
+            }
+            
+            cancelMultiConnect();
+        }
+        
+        function cancelMultiConnect() {
+            isMultiConnecting = false;
+            multiConnectOrigin = null;
+            multiConnectTargets = []; // Reset array
+            multiConnectPath = [];
+            draw(); // Redraw to clear visual feedback
+        }
 
+        // Keyboard event listeners for multi-connect
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Shift') {
+                shiftPressed = true;
+                if (currentTool === 'connect') {
+                    document.querySelector('.header p').textContent = 'Shift+Drag to connect multiple nodes in one action';
+                }
+            }
+        });
+        
+        document.addEventListener('keyup', function(e) {
+            if (e.key === 'Shift') {
+                shiftPressed = false;
+                if (currentTool === 'connect') {
+                    document.querySelector('.header p').textContent = 'Click on receiver node, then click on source node. Arrow shows data flow direction.';
+                }
+                // Cancel multi-connect if in progress
+                if (isMultiConnecting) {
+                    cancelMultiConnect();
+                }
+            }
+        });
+        
         // Initialize
         initializeCanvas();
         setupCanvasEventListeners();
