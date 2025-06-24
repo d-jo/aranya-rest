@@ -1319,6 +1319,74 @@ async fn serve_basic_html() -> Html<&'static str> {
         .input-group .btn {
             flex-shrink: 0;
         }
+        
+        /* Tool Arguments Panel */
+        .tool-args-panel {
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            margin: 0.5rem;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .tool-args-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            background: var(--background-color);
+            border-bottom: 1px solid var(--border-color);
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+            font-weight: 500;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+        
+        .tool-args-content {
+            padding: 0.75rem;
+        }
+        
+        .tool-args-section h6 {
+            margin: 0 0 0.75rem 0;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .tool-args-section .form-group {
+            margin-bottom: 0.5rem;
+        }
+        
+        .tool-args-section .form-group:last-child {
+            margin-bottom: 0;
+        }
+        
+        .tool-args-section label {
+            font-size: 0.8rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        .tool-args-section input[type="text"],
+        .tool-args-section input[type="number"],
+        .tool-args-section select {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        .btn-small {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.75rem;
+            padding: 0.25rem;
+            border-radius: var(--radius-sm);
+        }
+        
+        .btn-small:hover {
+            background: var(--border-color);
+            color: var(--text-primary);
+        }
     </style>
 </head>
 <body>
@@ -1604,6 +1672,68 @@ async fn serve_basic_html() -> Html<&'static str> {
                         <span style="color: var(--text-secondary); font-size: 0.875rem;">Zoom: <span id="zoomLevel">100%</span></span>
                     </div>
                 </div>
+                
+                <!-- Tool Arguments Panel -->
+                <div id="toolArgsPanel" class="tool-args-panel" style="display: none;">
+                    <div class="tool-args-header">
+                        <span id="toolArgsTitle">Tool Arguments</span>
+                        <button onclick="toggleToolArgs()" class="btn-small">▲</button>
+                    </div>
+                    <div id="toolArgsContent" class="tool-args-content">
+                        <!-- Create Node Arguments -->
+                        <div id="createNodeArgs" class="tool-args-section" style="display: none;">
+                            <h6>Create Node Options</h6>
+                            <div class="form-group">
+                                <label for="createNodeName">Node Name:</label>
+                                <input type="text" id="createNodeName" placeholder="Auto-generated if empty">
+                            </div>
+                            <div class="form-group">
+                                <label for="createNodeIcon">Node Icon:</label>
+                                <input type="text" id="createNodeIcon" placeholder="🔵" maxlength="2">
+                            </div>
+                            <div class="form-group">
+                                <label for="createNodeTeam">Join Team (optional):</label>
+                                <select id="createNodeTeam">
+                                    <option value="">-- No team --</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <!-- Connect Nodes Arguments -->
+                        <div id="connectNodesArgs" class="tool-args-section" style="display: none;">
+                            <h6>Connection Options</h6>
+                            <div class="form-group">
+                                <label for="connectTeam">Team:</label>
+                                <select id="connectTeam">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="connectInterval">Sync Interval (seconds):</label>
+                                <input type="number" id="connectInterval" min="1" max="3600" value="5">
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="connectBidirectional" checked>
+                                    Bidirectional sync
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="connectRandomInterval">
+                                    Random interval (1-10s)
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="connectSyncNow" checked>
+                                    Sync immediately
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="canvas-viewport">
                     <canvas id="canvas"></canvas>
                 </div>
@@ -2752,6 +2882,34 @@ async fn serve_basic_html() -> Html<&'static str> {
                 case 'NodeCreated':
                     nodes.set(message.node.id, message.node);
                     updateNodeSelectors();
+                    
+                    // Handle pending node configuration from tool args
+                    if (window.pendingNodeConfig) {
+                        const config = window.pendingNodeConfig;
+                        const nodeId = message.node.id;
+                        
+                        // Set custom icon if specified
+                        if (config.icon && currentTexturePack === 'custom') {
+                            texturePacks.custom.customNodeIcons.set(nodeId, config.icon);
+                        }
+                        
+                        // Join team if specified
+                        if (config.teamId && teams.has(config.teamId)) {
+                            const team = teams.get(config.teamId);
+                            setTimeout(() => {
+                                ws.send(JSON.stringify({
+                                    type: 'JoinTeam',
+                                    node_id: nodeId,
+                                    team_id: config.teamId,
+                                    owner_node_id: team.owner_node_id
+                                }));
+                            }, 500); // Small delay to ensure node is fully created
+                        }
+                        
+                        // Clear pending config
+                        delete window.pendingNodeConfig;
+                    }
+                    
                     // Only update selectors if the drawers are open
                     if (document.querySelector('[data-drawer-id="access-control"] .drawer-content.expanded')) {
                         updateAccessControlSelectors();
@@ -2759,6 +2917,8 @@ async fn serve_basic_html() -> Html<&'static str> {
                     if (document.querySelector('[data-drawer-id="sync-config"] .drawer-content.expanded')) {
                         updateSyncConfigSelectors();
                     }
+                    // Update tool args selectors
+                    updateToolArgsSelectors();
                     // Update individual node icons if custom texture panel is open
                     if (document.getElementById('customTexturePanel').style.display !== 'none') {
                         updateIndividualNodeIcons();
@@ -3418,15 +3578,35 @@ async fn serve_basic_html() -> Html<&'static str> {
                     const clampedY = Math.max(50, Math.min(CANVAS_HEIGHT - 50, worldPos.y));
                     console.log(`Clamped position: (${clampedX}, ${clampedY})`);
                     
+                    // Get node name from tool args or fallback to main input
+                    const toolArgsName = document.getElementById('createNodeName').value.trim();
                     const nameInput = document.getElementById('nodeNameInput');
-                    const name = nameInput.value.trim() || `Node${nodes.size + 1}`;
-                    nameInput.value = '';
+                    const fallbackName = nameInput.value.trim() || `Node${nodes.size + 1}`;
+                    const name = toolArgsName || fallbackName;
                     
+                    // Get other tool args
+                    const nodeIcon = document.getElementById('createNodeIcon').value.trim();
+                    const joinTeamId = document.getElementById('createNodeTeam').value;
+                    
+                    // Clear inputs
+                    nameInput.value = '';
+                    document.getElementById('createNodeName').value = '';
+                    
+                    // Create the node
                     ws.send(JSON.stringify({
                         type: 'CreateNode',
                         name: name,
                         position: { x: clampedX, y: clampedY }
                     }));
+                    
+                    // Store icon and team info for when the node is created
+                    if (nodeIcon || joinTeamId) {
+                        window.pendingNodeConfig = {
+                            icon: nodeIcon,
+                            teamId: joinTeamId,
+                            position: { x: clampedX, y: clampedY }
+                        };
+                    }
                 }
             } else if (currentTool === 'connect') {
                 if (nodeId) {
@@ -3434,19 +3614,48 @@ async fn serve_basic_html() -> Html<&'static str> {
                         // Start connection
                         connectStart = nodeId;
                     } else if (connectStart !== nodeId) {
-                        // Complete connection
-                        if (!selectedTeamId) {
-                            showNotification('Please select a team for sync operations first!', 'warning');
+                        // Complete connection using tool arguments
+                        const connectTeamId = document.getElementById('connectTeam').value;
+                        let interval = parseInt(document.getElementById('connectInterval').value) || 5;
+                        const bidirectional = document.getElementById('connectBidirectional').checked;
+                        const randomInterval = document.getElementById('connectRandomInterval').checked;
+                        const syncNow = document.getElementById('connectSyncNow').checked;
+                        
+                        // Use tool args team or fallback to selected team
+                        const teamId = connectTeamId || selectedTeamId;
+                        if (!teamId) {
+                            showNotification('Please select a team in the connection options or main team selector!', 'warning');
                             return;
                         }
+                        
+                        // Apply random interval if selected
+                        if (randomInterval) {
+                            interval = Math.floor(Math.random() * 10) + 1; // 1-10 seconds
+                        }
+                        
+                        // Create primary connection
                         ws.send(JSON.stringify({
                             type: 'AddSyncConnection',
                             from: connectStart,
                             to: nodeId,
-                            team_id: selectedTeamId,
-                            interval_secs: 5,
-                            sync_now: true
+                            team_id: teamId,
+                            interval_secs: interval,
+                            sync_now: syncNow
                         }));
+                        
+                        // Create reverse connection if bidirectional
+                        if (bidirectional) {
+                            const reverseInterval = randomInterval ? Math.floor(Math.random() * 10) + 1 : interval;
+                            ws.send(JSON.stringify({
+                                type: 'AddSyncConnection',
+                                from: nodeId,
+                                to: connectStart,
+                                team_id: teamId,
+                                interval_secs: reverseInterval,
+                                sync_now: syncNow
+                            }));
+                        }
+                        
                         connectStart = null;
                     } else {
                         // Clicked same node, cancel
@@ -3680,17 +3889,90 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             });
             document.getElementById(tool + 'Tool').classList.add('active');
             
+            // Show/hide tool arguments panel
+            showToolArgs(tool);
+            
             // Update instructions
             const header = document.querySelector('.header p');
             if (tool === 'select') {
                 header.textContent = 'Click and drag to move nodes. Right-click for options.';
             } else if (tool === 'place') {
-                header.textContent = 'Click on empty space to place a new node.';
+                header.textContent = 'Click on empty space to place a new node. Configure options below.';
             } else if (tool === 'connect') {
-                header.textContent = 'Click on receiver node, then click on source node. Arrow shows data flow direction.';
+                header.textContent = 'Click on receiver node, then click on source node. Configure connection options below.';
             }
             
             draw();
+        }
+        
+        // Tool Arguments Functions
+        function showToolArgs(tool) {
+            const panel = document.getElementById('toolArgsPanel');
+            const sections = document.querySelectorAll('.tool-args-section');
+            
+            // Hide all sections first
+            sections.forEach(section => section.style.display = 'none');
+            
+            if (tool === 'place') {
+                document.getElementById('createNodeArgs').style.display = 'block';
+                document.getElementById('toolArgsTitle').textContent = 'Create Node Options';
+                panel.style.display = 'block';
+                updateToolArgsSelectors();
+            } else if (tool === 'connect') {
+                document.getElementById('connectNodesArgs').style.display = 'block';
+                document.getElementById('toolArgsTitle').textContent = 'Connection Options';
+                panel.style.display = 'block';
+                updateToolArgsSelectors();
+            } else {
+                panel.style.display = 'none';
+            }
+        }
+        
+        function toggleToolArgs() {
+            const content = document.getElementById('toolArgsContent');
+            const button = document.querySelector('.tool-args-header button');
+            
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                button.textContent = '▲';
+            } else {
+                content.style.display = 'none';
+                button.textContent = '▼';
+            }
+        }
+        
+        function updateToolArgsSelectors() {
+            // Update create node team selector
+            const createNodeTeamSelector = document.getElementById('createNodeTeam');
+            if (createNodeTeamSelector) {
+                const currentValue = createNodeTeamSelector.value;
+                createNodeTeamSelector.innerHTML = '<option value="">-- No team --</option>';
+                teams.forEach((team, id) => {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = team.name || `Team ${id.slice(0, 8)}`;
+                    createNodeTeamSelector.appendChild(option);
+                });
+                if (currentValue && teams.has(currentValue)) {
+                    createNodeTeamSelector.value = currentValue;
+                }
+            }
+            
+            // Update connect team selector
+            const connectTeamSelector = document.getElementById('connectTeam');
+            if (connectTeamSelector) {
+                const currentValue = connectTeamSelector.value;
+                connectTeamSelector.innerHTML = '<option value="">-- Select Team --</option>';
+                teams.forEach((team, id) => {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = team.name || `Team ${id.slice(0, 8)}`;
+                    connectTeamSelector.appendChild(option);
+                });
+                if (currentValue && teams.has(currentValue)) {
+                    connectTeamSelector.value = currentValue;
+                }
+            }
         }
 
         function updateTeamsUI() {
@@ -4522,6 +4804,18 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         document.getElementById('syncTeamSelector').addEventListener('change', updateSyncButtonState);
         document.getElementById('syncInterval').addEventListener('input', updateSyncButtonState);
         document.getElementById('customSyncUrl').addEventListener('input', updateSyncButtonState);
+        
+        // Tool Arguments event listeners
+        document.getElementById('connectRandomInterval').addEventListener('change', function() {
+            const intervalInput = document.getElementById('connectInterval');
+            if (this.checked) {
+                intervalInput.disabled = true;
+                intervalInput.placeholder = 'Random (1-10s)';
+            } else {
+                intervalInput.disabled = false;
+                intervalInput.placeholder = '5';
+            }
+        });
 
         // Access Control Functions
         function assignRoleFromUI() {
