@@ -435,30 +435,30 @@ async fn handle_message(
             }
         }
 
-        WsMessage::RemoveDeviceFromTeam { node_id, team_id } => {
-            match daemon_manager.remove_device_from_team(node_id, &team_id).await {
+        WsMessage::RemoveDeviceFromTeam { node_id, team_id, target_node_id } => {
+            match daemon_manager.remove_device_from_team(node_id, &team_id, target_node_id).await {
                 Ok(_) => {
-                    // Update the node's teams in state
+                    // Update the target node's teams in state
                     {
                         let mut state_guard = state.write().await;
-                        if let Some(target_node) = state_guard.nodes.get_mut(&node_id) {
+                        if let Some(target_node) = state_guard.nodes.get_mut(&target_node_id) {
                             // Remove the team from the node's teams array
                             target_node.teams.retain(|t| t.id != team_id);
                         }
                         
                         // Remove from global teams structure
                         if let Some(team) = state_guard.teams.get_mut(&team_id) {
-                            team.members.retain(|m| m.node_id != node_id);
+                            team.members.retain(|m| m.node_id != target_node_id);
                         }
                     }
                     
                     let _ = tx.send(WsMessage::DeviceRemovedFromTeam { 
-                        node_id, 
+                        node_id: target_node_id, 
                         team_id: team_id.clone() 
                     });
                 }
                 Err(e) => {
-                    error!("Failed to remove device from team for node {}: {}", node_id, e);
+                    error!("Failed to remove device {} from team via node {}: {}", target_node_id, node_id, e);
                     let _ = tx.send(WsMessage::Error { 
                         message: format!("Failed to remove device from team: {}", e) 
                     });

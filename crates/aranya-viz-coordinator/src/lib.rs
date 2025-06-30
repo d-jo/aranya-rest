@@ -80,7 +80,7 @@ pub enum WsMessage {
     CreateTeam { node_id: Uuid, team_name: String },
     JoinTeam { node_id: Uuid, team_id: String, owner_node_id: Uuid },
     LeaveTeam { node_id: Uuid, team_id: String },
-    RemoveDeviceFromTeam { node_id: Uuid, team_id: String },
+    RemoveDeviceFromTeam { node_id: Uuid, team_id: String, target_node_id: Uuid },
     AssignRole { node_id: Uuid, team_id: String, target_node_id: Uuid, role: String },
     RevokeRole { node_id: Uuid, team_id: String, target_node_id: Uuid, role: String },
     

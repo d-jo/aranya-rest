@@ -1574,7 +1574,13 @@ async fn serve_basic_html() -> Html<&'static str> {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="deviceRemovalNodeSelector">Select Device to Remove:</label>
+                                <label for="deviceRemovalActingNodeSelector">Acting Node (who performs removal):</label>
+                                <select id="deviceRemovalActingNodeSelector">
+                                    <option value="">-- Select Acting Node --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="deviceRemovalNodeSelector">Target Device (to be removed):</label>
                                 <select id="deviceRemovalNodeSelector">
                                     <option value="">-- Select Device --</option>
                                 </select>
@@ -4868,6 +4874,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         document.getElementById('roleTeamSelector').addEventListener('change', updateAccessControlButtonStates);
         document.getElementById('newRoleSelector').addEventListener('change', updateAccessControlButtonStates);
         
+        document.getElementById('deviceRemovalActingNodeSelector').addEventListener('change', updateDeviceRemovalButtonState);
         document.getElementById('deviceRemovalNodeSelector').addEventListener('change', updateDeviceRemovalButtonState);
         document.getElementById('deviceRemovalTeamSelector').addEventListener('change', updateDeviceRemovalButtonState);
         
@@ -4955,11 +4962,17 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         }
         
         function removeDeviceFromTeamUI() {
-            const nodeId = document.getElementById('deviceRemovalNodeSelector').value;
+            const actingNodeId = document.getElementById('deviceRemovalActingNodeSelector').value;
+            const targetNodeId = document.getElementById('deviceRemovalNodeSelector').value;
             const teamId = document.getElementById('deviceRemovalTeamSelector').value;
             
-            if (!nodeId || !teamId) {
-                showNotification('Please select device and team', 'warning');
+            if (!actingNodeId || !targetNodeId || !teamId) {
+                showNotification('Please select acting node, target device, and team', 'warning');
+                return;
+            }
+            
+            if (actingNodeId === targetNodeId) {
+                showNotification('Acting node and target device cannot be the same', 'warning');
                 return;
             }
             
@@ -4969,7 +4982,8 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             
             const payload = {
                 type: 'RemoveDeviceFromTeam',
-                node_id: nodeId,
+                node_id: actingNodeId,
+                target_node_id: targetNodeId,
                 team_id: teamId
             };
             
@@ -5144,10 +5158,14 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         }
         
         function updateDeviceRemovalButtonState() {
-            const nodeSelected = document.getElementById('deviceRemovalNodeSelector').value;
+            const actingNodeSelected = document.getElementById('deviceRemovalActingNodeSelector').value;
+            const targetNodeSelected = document.getElementById('deviceRemovalNodeSelector').value;
             const teamSelected = document.getElementById('deviceRemovalTeamSelector').value;
             
-            document.getElementById('removeDeviceBtn').disabled = !nodeSelected || !teamSelected;
+            const allSelected = actingNodeSelected && targetNodeSelected && teamSelected;
+            const sameNode = actingNodeSelected === targetNodeSelected;
+            
+            document.getElementById('removeDeviceBtn').disabled = !allSelected || sameNode;
         }
         
         // Removed updateTeamOverviewButtonState - Team Overview section was removed
@@ -5206,7 +5224,23 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                 roleTargetNodeSelector.value = currentTargetNodeValue;
             }
             
-            // Device removal selector
+            // Device removal acting node selector
+            const deviceRemovalActingSelector = document.getElementById('deviceRemovalActingNodeSelector');
+            const currentRemovalActingValue = deviceRemovalActingSelector.value;
+            deviceRemovalActingSelector.innerHTML = '<option value="">-- Select Acting Node --</option>';
+            nodes.forEach((node, id) => {
+                if (node.status === 'Running') {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = node.name || `Node ${id.slice(0, 8)}`;
+                    deviceRemovalActingSelector.appendChild(option);
+                }
+            });
+            if (currentRemovalActingValue && nodes.has(currentRemovalActingValue)) {
+                deviceRemovalActingSelector.value = currentRemovalActingValue;
+            }
+            
+            // Device removal target selector
             const deviceRemovalSelector = document.getElementById('deviceRemovalNodeSelector');
             const currentRemovalNodeValue = deviceRemovalSelector.value;
             deviceRemovalSelector.innerHTML = '<option value="">-- Select Device --</option>';
