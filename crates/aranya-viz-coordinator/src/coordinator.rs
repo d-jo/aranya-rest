@@ -1401,14 +1401,14 @@ async fn serve_basic_html() -> Html<&'static str> {
         <div class="main-content">
             <div class="panel" id="leftPanel" style="width: 350px; border-right: 1px solid var(--border-color);">
                 <div class="drawer" data-drawer-id="appearance">
-                    <div class="drawer-header expanded">
+                    <div class="drawer-header">
                         <div class="drawer-title">
                             <span class="drawer-icon">🎨</span>
                             <span>Appearance</span>
                         </div>
                         <span class="drawer-arrow">▶</span>
                     </div>
-                    <div class="drawer-content expanded">
+                    <div class="drawer-content">
                         <div class="drawer-inner">
                             <div class="texture-selector">
                                 <h5>Background Themes</h5>
@@ -1480,14 +1480,14 @@ async fn serve_basic_html() -> Html<&'static str> {
                 </div>
                 
                 <div class="drawer" data-drawer-id="messaging">
-                    <div class="drawer-header expanded">
+                    <div class="drawer-header">
                         <div class="drawer-title">
                             <span class="drawer-icon">💬</span>
                             <span>Messaging</span>
                         </div>
                         <span class="drawer-arrow">▶</span>
                     </div>
-                    <div class="drawer-content expanded">
+                    <div class="drawer-content">
                         <div class="drawer-inner">
                             <h5>📤 Send Message</h5>
                             <div class="form-group">
@@ -4769,9 +4769,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             bubble.innerHTML = `<strong>${authorName}:</strong> ${message}`;
             bubble.dataset.nodeId = nodeId; // Store node ID for position updates
             
-            // Position bubble above node (convert world coordinates to screen)
-            updateMessageBubblePosition(bubble, node);
-            
+            // Add bubble to DOM first
             document.body.appendChild(bubble);
             
             // Store bubble reference
@@ -4780,10 +4778,16 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             }
             messageBubbles.get(nodeId).push(bubble);
             
-            // Animate in
-            setTimeout(() => {
-                bubble.classList.add('show');
-            }, 100);
+            // Position bubble after it's in the DOM and has dimensions
+            // Use requestAnimationFrame to ensure the bubble is rendered
+            requestAnimationFrame(() => {
+                updateMessageBubblePosition(bubble, node);
+                
+                // Animate in after positioning
+                setTimeout(() => {
+                    bubble.classList.add('show');
+                }, 50);
+            });
             
             // Remove after 6 seconds (longer duration for easier visibility)
             setTimeout(() => {
@@ -4811,8 +4815,16 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             if (!canvas) return;
             const rect = canvas.getBoundingClientRect();
             const screenPos = worldToScreen(node.position.x, node.position.y);
-            bubble.style.left = (rect.left + screenPos.x - 100) + 'px';
-            bubble.style.top = (rect.top + screenPos.y - 60) + 'px';
+            
+            // Get the actual bubble dimensions
+            const bubbleRect = bubble.getBoundingClientRect();
+            const bubbleWidth = bubbleRect.width || 200; // fallback width
+            const bubbleHeight = bubbleRect.height || 40; // fallback height
+            
+            // Center the bubble horizontally on the node
+            bubble.style.left = (rect.left + screenPos.x - bubbleWidth / 2) + 'px';
+            // Position bubble above the node (node radius is 30px, plus spacing for the arrow)
+            bubble.style.top = (rect.top + screenPos.y - 30 - bubbleHeight - 10) + 'px';
         }
         
         function updateAllMessageBubbles() {
