@@ -2894,6 +2894,8 @@ async fn serve_basic_html() -> Html<&'static str> {
                 setTimeout(startMessagePolling, 2000);
                 // Start role polling after connection
                 setTimeout(startRolePolling, 2000);
+                // Start selector updates after connection
+                setTimeout(startSelectorUpdates, 2000);
             };
             
             ws.onmessage = function(event) {
@@ -2905,6 +2907,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                 document.getElementById('status').textContent = 'Disconnected. Attempting to reconnect...';
                 stopMessagePolling();
                 stopRolePolling();
+                stopSelectorUpdates();
                 setTimeout(connectWebSocket, 1000);
             };
             
@@ -4894,6 +4897,48 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             }
         }
 
+        // Selector update polling
+        let selectorUpdateInterval = null;
+
+        function startSelectorUpdates() {
+            if (selectorUpdateInterval) {
+                clearInterval(selectorUpdateInterval);
+            }
+            
+            // Update selectors every 2 seconds to catch new nodes joining teams
+            selectorUpdateInterval = setInterval(() => {
+                // Only update if the drawers are actually open
+                const accessControlOpen = document.querySelector('[data-drawer-id="access-control"] .drawer-content.expanded');
+                const syncConfigOpen = document.querySelector('[data-drawer-id="sync-config"] .drawer-content.expanded');
+                const messageControlOpen = document.querySelector('[data-drawer-id="team-messaging"] .drawer-content.expanded');
+                
+                if (accessControlOpen) {
+                    // Update only the node selectors, not the team selectors
+                    updateRoleNodeSelectors();
+                    updateDeviceRemovalNodeSelectors();
+                }
+                
+                if (syncConfigOpen) {
+                    updateSyncNodeSelectors();
+                }
+                
+                if (messageControlOpen) {
+                    // Update message sender selector if a team is selected
+                    const teamId = document.getElementById('messageTeamSelector').value;
+                    if (teamId) {
+                        updateMessageSenderSelector();
+                    }
+                }
+            }, 2000);
+        }
+
+        function stopSelectorUpdates() {
+            if (selectorUpdateInterval) {
+                clearInterval(selectorUpdateInterval);
+                selectorUpdateInterval = null;
+            }
+        }
+
         async function queryNodeRole(nodeId, teamId) {
             const node = nodes.get(nodeId);
             if (!node || node.status !== 'Running') {
@@ -5026,19 +5071,28 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         // Access Control event listeners
         document.getElementById('roleActingNodeSelector').addEventListener('change', updateAccessControlButtonStates);
         document.getElementById('roleTargetNodeSelector').addEventListener('change', updateAccessControlButtonStates);
-        document.getElementById('roleTeamSelector').addEventListener('change', updateAccessControlButtonStates);
+        document.getElementById('roleTeamSelector').addEventListener('change', function() {
+            updateRoleNodeSelectors();
+            updateAccessControlButtonStates();
+        });
         document.getElementById('newRoleSelector').addEventListener('change', updateAccessControlButtonStates);
         
         document.getElementById('deviceRemovalActingNodeSelector').addEventListener('change', updateDeviceRemovalButtonState);
         document.getElementById('deviceRemovalNodeSelector').addEventListener('change', updateDeviceRemovalButtonState);
-        document.getElementById('deviceRemovalTeamSelector').addEventListener('change', updateDeviceRemovalButtonState);
+        document.getElementById('deviceRemovalTeamSelector').addEventListener('change', function() {
+            updateDeviceRemovalNodeSelectors();
+            updateDeviceRemovalButtonState();
+        });
         
         // Removed overviewTeamSelector - Team Overview section was removed
         
         // Sync Peer event listeners
         document.getElementById('syncFromNodeSelector').addEventListener('change', updateSyncButtonState);
         document.getElementById('syncToNodeSelector').addEventListener('change', updateSyncButtonState);
-        document.getElementById('syncTeamSelector').addEventListener('change', updateSyncButtonState);
+        document.getElementById('syncTeamSelector').addEventListener('change', function() {
+            updateSyncNodeSelectors();
+            updateSyncButtonState();
+        });
         document.getElementById('syncInterval').addEventListener('input', updateSyncButtonState);
         document.getElementById('customSyncUrl').addEventListener('input', updateSyncButtonState);
         
@@ -5347,71 +5401,11 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         
         // Update node selectors for new UI elements
         function updateAccessControlSelectors() {
-            // Role acting node selector
-            const roleActingNodeSelector = document.getElementById('roleActingNodeSelector');
-            const currentActingNodeValue = roleActingNodeSelector.value;
-            roleActingNodeSelector.innerHTML = '<option value="">-- Select Acting Node --</option>';
-            nodes.forEach((node, id) => {
-                if (node.status === 'Running') {
-                    const option = document.createElement('option');
-                    option.value = id;
-                    option.textContent = node.name || `Node ${id.slice(0, 8)}`;
-                    roleActingNodeSelector.appendChild(option);
-                }
-            });
-            if (currentActingNodeValue && nodes.has(currentActingNodeValue)) {
-                roleActingNodeSelector.value = currentActingNodeValue;
-            }
+            // Get current team selections
+            const roleTeamId = document.getElementById('roleTeamSelector').value;
+            const deviceRemovalTeamId = document.getElementById('deviceRemovalTeamSelector').value;
             
-            // Role target node selector
-            const roleTargetNodeSelector = document.getElementById('roleTargetNodeSelector');
-            const currentTargetNodeValue = roleTargetNodeSelector.value;
-            roleTargetNodeSelector.innerHTML = '<option value="">-- Select Target Node --</option>';
-            nodes.forEach((node, id) => {
-                if (node.status === 'Running') {
-                    const option = document.createElement('option');
-                    option.value = id;
-                    option.textContent = node.name || `Node ${id.slice(0, 8)}`;
-                    roleTargetNodeSelector.appendChild(option);
-                }
-            });
-            if (currentTargetNodeValue && nodes.has(currentTargetNodeValue)) {
-                roleTargetNodeSelector.value = currentTargetNodeValue;
-            }
-            
-            // Device removal acting node selector
-            const deviceRemovalActingSelector = document.getElementById('deviceRemovalActingNodeSelector');
-            const currentRemovalActingValue = deviceRemovalActingSelector.value;
-            deviceRemovalActingSelector.innerHTML = '<option value="">-- Select Acting Node --</option>';
-            nodes.forEach((node, id) => {
-                if (node.status === 'Running') {
-                    const option = document.createElement('option');
-                    option.value = id;
-                    option.textContent = node.name || `Node ${id.slice(0, 8)}`;
-                    deviceRemovalActingSelector.appendChild(option);
-                }
-            });
-            if (currentRemovalActingValue && nodes.has(currentRemovalActingValue)) {
-                deviceRemovalActingSelector.value = currentRemovalActingValue;
-            }
-            
-            // Device removal target selector
-            const deviceRemovalSelector = document.getElementById('deviceRemovalNodeSelector');
-            const currentRemovalNodeValue = deviceRemovalSelector.value;
-            deviceRemovalSelector.innerHTML = '<option value="">-- Select Device --</option>';
-            nodes.forEach((node, id) => {
-                if (node.status === 'Running') {
-                    const option = document.createElement('option');
-                    option.value = id;
-                    option.textContent = node.name || `Node ${id.slice(0, 8)}`;
-                    deviceRemovalSelector.appendChild(option);
-                }
-            });
-            if (currentRemovalNodeValue && nodes.has(currentRemovalNodeValue)) {
-                deviceRemovalSelector.value = currentRemovalNodeValue;
-            }
-            
-            // Team selectors
+            // Update team selectors first
             const teamSelectors = [
                 'roleTeamSelector',
                 'deviceRemovalTeamSelector'
@@ -5431,42 +5425,106 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                     selector.value = currentValue;
                 }
             });
+            
+            // Update node selectors based on selected teams
+            updateRoleNodeSelectors();
+            updateDeviceRemovalNodeSelectors();
+        }
+        
+        function updateRoleNodeSelectors() {
+            const teamId = document.getElementById('roleTeamSelector').value;
+            
+            // Role acting node selector - only show nodes in the selected team
+            const roleActingNodeSelector = document.getElementById('roleActingNodeSelector');
+            const currentActingNodeValue = roleActingNodeSelector.value;
+            roleActingNodeSelector.innerHTML = '<option value="">-- Select Acting Node --</option>';
+            
+            if (teamId) {
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running' && node.teams && node.teams.some(t => t.id === teamId)) {
+                        const teamInfo = node.teams.find(t => t.id === teamId);
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = `${node.name || `Node ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        roleActingNodeSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            if (currentActingNodeValue && roleActingNodeSelector.querySelector(`option[value="${currentActingNodeValue}"]`)) {
+                roleActingNodeSelector.value = currentActingNodeValue;
+            }
+            
+            // Role target node selector - show all nodes in the team
+            const roleTargetNodeSelector = document.getElementById('roleTargetNodeSelector');
+            const currentTargetNodeValue = roleTargetNodeSelector.value;
+            roleTargetNodeSelector.innerHTML = '<option value="">-- Select Target Node --</option>';
+            
+            if (teamId) {
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running' && node.teams && node.teams.some(t => t.id === teamId)) {
+                        const teamInfo = node.teams.find(t => t.id === teamId);
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = `${node.name || `Node ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        roleTargetNodeSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            if (currentTargetNodeValue && roleTargetNodeSelector.querySelector(`option[value="${currentTargetNodeValue}"]`)) {
+                roleTargetNodeSelector.value = currentTargetNodeValue;
+            }
+        }
+        
+        function updateDeviceRemovalNodeSelectors() {
+            const teamId = document.getElementById('deviceRemovalTeamSelector').value;
+            
+            // Device removal acting node selector - only show nodes in the selected team
+            const deviceRemovalActingSelector = document.getElementById('deviceRemovalActingNodeSelector');
+            const currentRemovalActingValue = deviceRemovalActingSelector.value;
+            deviceRemovalActingSelector.innerHTML = '<option value="">-- Select Acting Node --</option>';
+            
+            if (teamId) {
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running' && node.teams && node.teams.some(t => t.id === teamId)) {
+                        const teamInfo = node.teams.find(t => t.id === teamId);
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = `${node.name || `Node ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        deviceRemovalActingSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            if (currentRemovalActingValue && deviceRemovalActingSelector.querySelector(`option[value="${currentRemovalActingValue}"]`)) {
+                deviceRemovalActingSelector.value = currentRemovalActingValue;
+            }
+            
+            // Device removal target selector - show all nodes in the team
+            const deviceRemovalSelector = document.getElementById('deviceRemovalNodeSelector');
+            const currentRemovalNodeValue = deviceRemovalSelector.value;
+            deviceRemovalSelector.innerHTML = '<option value="">-- Select Device --</option>';
+            
+            if (teamId) {
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running' && node.teams && node.teams.some(t => t.id === teamId)) {
+                        const teamInfo = node.teams.find(t => t.id === teamId);
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = `${node.name || `Node ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        deviceRemovalSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            if (currentRemovalNodeValue && deviceRemovalSelector.querySelector(`option[value="${currentRemovalNodeValue}"]`)) {
+                deviceRemovalSelector.value = currentRemovalNodeValue;
+            }
         }
         
         function updateSyncConfigSelectors() {
-            // From node selector
-            const syncFromNodeSelector = document.getElementById('syncFromNodeSelector');
-            const currentFromValue = syncFromNodeSelector.value;
-            syncFromNodeSelector.innerHTML = '<option value="">-- Select Source Node --</option>';
-            nodes.forEach((node, id) => {
-                if (node.status === 'Running') {
-                    const option = document.createElement('option');
-                    option.value = id;
-                    option.textContent = node.name || `Node ${id.slice(0, 8)}`;
-                    syncFromNodeSelector.appendChild(option);
-                }
-            });
-            if (currentFromValue && nodes.has(currentFromValue)) {
-                syncFromNodeSelector.value = currentFromValue;
-            }
-            
-            // To node selector  
-            const syncToNodeSelector = document.getElementById('syncToNodeSelector');
-            const currentToValue = syncToNodeSelector.value;
-            syncToNodeSelector.innerHTML = '<option value="">-- Select Target Node --</option>';
-            nodes.forEach((node, id) => {
-                if (node.status === 'Running') {
-                    const option = document.createElement('option');
-                    option.value = id;
-                    option.textContent = node.name || `Node ${id.slice(0, 8)}`;
-                    syncToNodeSelector.appendChild(option);
-                }
-            });
-            if (currentToValue && nodes.has(currentToValue)) {
-                syncToNodeSelector.value = currentToValue;
-            }
-            
-            // Team selector
+            // Team selector first
             const syncTeamSelector = document.getElementById('syncTeamSelector');
             const currentTeamValue = syncTeamSelector.value;
             syncTeamSelector.innerHTML = '<option value="">-- Select Team --</option>';
@@ -5478,6 +5536,55 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             });
             if (currentTeamValue && teams.has(currentTeamValue)) {
                 syncTeamSelector.value = currentTeamValue;
+            }
+            
+            // Update node selectors based on selected team
+            updateSyncNodeSelectors();
+        }
+        
+        function updateSyncNodeSelectors() {
+            const teamId = document.getElementById('syncTeamSelector').value;
+            
+            // From node selector - only show nodes in the selected team
+            const syncFromNodeSelector = document.getElementById('syncFromNodeSelector');
+            const currentFromValue = syncFromNodeSelector.value;
+            syncFromNodeSelector.innerHTML = '<option value="">-- Select Source Node --</option>';
+            
+            if (teamId) {
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running' && node.teams && node.teams.some(t => t.id === teamId)) {
+                        const teamInfo = node.teams.find(t => t.id === teamId);
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = `${node.name || `Node ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        syncFromNodeSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            if (currentFromValue && syncFromNodeSelector.querySelector(`option[value="${currentFromValue}"]`)) {
+                syncFromNodeSelector.value = currentFromValue;
+            }
+            
+            // To node selector - only show nodes in the selected team
+            const syncToNodeSelector = document.getElementById('syncToNodeSelector');
+            const currentToValue = syncToNodeSelector.value;
+            syncToNodeSelector.innerHTML = '<option value="">-- Select Target Node --</option>';
+            
+            if (teamId) {
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running' && node.teams && node.teams.some(t => t.id === teamId)) {
+                        const teamInfo = node.teams.find(t => t.id === teamId);
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = `${node.name || `Node ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        syncToNodeSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            if (currentToValue && syncToNodeSelector.querySelector(`option[value="${currentToValue}"]`)) {
+                syncToNodeSelector.value = currentToValue;
             }
             
             updateSyncButtonState();
