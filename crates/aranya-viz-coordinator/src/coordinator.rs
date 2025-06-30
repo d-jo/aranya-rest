@@ -4873,15 +4873,15 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         // Role polling functions
         let rolePollingInterval = null;
         const roleCache = new Map(); // nodeId-teamId -> { role, timestamp }
-        const ROLE_CACHE_TTL = 5000; // 5 seconds cache
+        const ROLE_CACHE_TTL = 1000; // 1 second cache for responsive updates
 
         function startRolePolling() {
             if (rolePollingInterval) {
                 clearInterval(rolePollingInterval);
             }
             
-            // Poll every 2 seconds for role updates
-            rolePollingInterval = setInterval(pollNodeRoles, 2000);
+            // Poll every 500ms for role updates (more responsive)
+            rolePollingInterval = setInterval(pollNodeRoles, 500);
             
             // Also poll immediately
             setTimeout(pollNodeRoles, 100);
@@ -4941,6 +4941,8 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             const updatePromises = [];
             
             // Query roles for all running nodes in teams
+            // We poll frequently (500ms) to ensure the UI accurately reflects the actual node state
+            // since role changes may take time to propagate through the daemon sync
             nodes.forEach((node, nodeId) => {
                 if (node.status === 'Running' && node.teams && node.teams.length > 0) {
                     node.teams.forEach((team, index) => {
