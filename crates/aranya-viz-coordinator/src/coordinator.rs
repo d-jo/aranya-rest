@@ -2796,14 +2796,28 @@ async fn serve_basic_html() -> Html<&'static str> {
             const viewport = document.querySelector('.canvas-viewport');
             const rect = viewport.getBoundingClientRect();
             
-            // Set canvas size to match viewport
-            canvas.width = rect.width;
-            canvas.height = rect.height;
+            // Handle high-DPI displays
+            const dpr = window.devicePixelRatio || 1;
+            
+            // Set display size (css pixels)
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = rect.height + 'px';
+            
+            // Set actual buffer size (scaled for device pixel ratio)
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            
+            // Scale drawing context to account for device pixel ratio
+            ctx.scale(dpr, dpr);
+            
+            // Store display dimensions for coordinate calculations
+            canvas.displayWidth = rect.width;
+            canvas.displayHeight = rect.height;
             
             // Center the viewport initially if this is first initialization
             if (viewportX === 0 && viewportY === 0) {
-                viewportX = (canvas.width - CANVAS_WIDTH * viewportScale) / 2;
-                viewportY = (canvas.height - CANVAS_HEIGHT * viewportScale) / 2;
+                viewportX = (rect.width - CANVAS_WIDTH * viewportScale) / 2;
+                viewportY = (rect.height - CANVAS_HEIGHT * viewportScale) / 2;
             }
             
             // Redraw after resize
@@ -2811,7 +2825,33 @@ async fn serve_basic_html() -> Html<&'static str> {
         }
         
         // Handle window resize
-        window.addEventListener('resize', initializeCanvas);
+        window.addEventListener('resize', () => {
+            console.log('Window resized, reinitializing canvas');
+            initializeCanvas();
+        });
+        
+        // Use ResizeObserver for more accurate canvas container size changes
+        if (window.ResizeObserver) {
+            const resizeObserver = new ResizeObserver(entries => {
+                for (let entry of entries) {
+                    if (entry.target.classList.contains('canvas-viewport')) {
+                        console.log('Canvas viewport resized via ResizeObserver');
+                        initializeCanvas();
+                    }
+                }
+            });
+            
+            // Start observing once the viewport is available
+            const checkAndObserve = () => {
+                const viewport = document.querySelector('.canvas-viewport');
+                if (viewport) {
+                    resizeObserver.observe(viewport);
+                } else {
+                    setTimeout(checkAndObserve, 100);
+                }
+            };
+            checkAndObserve();
+        }
         let dragNode = null;
         let showConnections = true;
         let contextMenuNode = null;
@@ -3284,6 +3324,20 @@ async fn serve_basic_html() -> Html<&'static str> {
         function draw() {
             if (!ctx || !canvas) return;
             
+            // Ensure canvas is properly sized before drawing
+            const viewport = document.querySelector('.canvas-viewport');
+            if (viewport) {
+                const rect = viewport.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                
+                // Check if canvas needs resizing
+                if (canvas.displayWidth !== rect.width || canvas.displayHeight !== rect.height) {
+                    console.log('Canvas size mismatch detected, resizing...');
+                    initializeCanvas();
+                    return; // initializeCanvas will call draw() again
+                }
+            }
+            
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             // Save context and apply viewport transformations
@@ -3626,12 +3680,18 @@ async fn serve_basic_html() -> Html<&'static str> {
             if (!canvas || canvasEventListenersSetup) return;
             canvasEventListenersSetup = true;
             
+            // Note: Mouse coordinates are calculated in CSS pixels (e.clientX - rect.left)
+            // This is correct for high DPI displays because:
+            // 1. Canvas buffer is sized with devicePixelRatio: canvas.width = rect.width * dpr
+            // 2. Context is scaled by dpr: ctx.scale(dpr, dpr)
+            // 3. All drawing operations use CSS pixel coordinates which are automatically scaled
+            
             canvas.addEventListener('click', function(e) {
                 const rect = canvas.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
             
-            console.log(`Canvas click: screen(${x}, ${y}), canvas size(${canvas.width}, ${canvas.height}), viewport(${viewportX}, ${viewportY}), scale(${viewportScale})`);
+            console.log(`Canvas click: screen(${x}, ${y}), canvas display size(${canvas.displayWidth || rect.width}, ${canvas.displayHeight || rect.height}), buffer size(${canvas.width}, ${canvas.height}), viewport(${viewportX}, ${viewportY}), scale(${viewportScale})`);
             
             const nodeId = getNodeAt(x, y);
             if (nodeId) {
@@ -5493,6 +5553,36 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         loadAllTexturePacks();
         loadPreferences();
         connectWebSocket();
+        
+        // Set up automatic canvas size checking
+        // This helps catch cases where the browser doesn't fire resize events
+        setInterval(() => {
+            const viewport = document.querySelector('.canvas-viewport');
+            if (viewport && canvas) {
+                const rect = viewport.getBoundingClientRect();
+                if (canvas.displayWidth !== rect.width || canvas.displayHeight !== rect.height) {
+                    console.log('Periodic size check: Canvas needs resizing');
+                    initializeCanvas();
+                }
+            }
+        }, 1000); // Check every second
+        
+        // Also trigger on visibility changes (e.g., tab switching)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                setTimeout(initializeCanvas, 100);
+            }
+        });
+        
+        // Handle browser zoom changes
+        let lastDevicePixelRatio = window.devicePixelRatio;
+        window.addEventListener('resize', () => {
+            if (window.devicePixelRatio !== lastDevicePixelRatio) {
+                console.log('Device pixel ratio changed (zoom?), reinitializing canvas');
+                lastDevicePixelRatio = window.devicePixelRatio;
+                initializeCanvas();
+            }
+        });
     </script>
 </body>
 </html>"#)
