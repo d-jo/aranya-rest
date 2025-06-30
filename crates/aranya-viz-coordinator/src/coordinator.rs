@@ -1821,6 +1821,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                                 • <span class="role-color" style="color: #FF9800;">Orange</span>: Admin<br>
                                 • <span class="role-color" style="color: #9C27B0;">Purple</span>: Operator<br>
                                 • <span class="role-color" style="color: #2196F3;">Blue</span>: Member<br>
+                                • <span class="role-color" style="color: #808080;">Gray</span>: Loading...<br>
                                 <br>
                                 <strong>Sync Types:</strong><br>
                                 • <span style="color: var(--primary-color);">Auto-Sync</span>: Full mesh<br>
@@ -2891,6 +2892,8 @@ async fn serve_basic_html() -> Html<&'static str> {
                 ws.send(JSON.stringify({ type: 'GetState' }));
                 // Start message polling after connection
                 setTimeout(startMessagePolling, 2000);
+                // Start role polling after connection
+                setTimeout(startRolePolling, 2000);
             };
             
             ws.onmessage = function(event) {
@@ -2901,6 +2904,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             ws.onclose = function() {
                 document.getElementById('status').textContent = 'Disconnected. Attempting to reconnect...';
                 stopMessagePolling();
+                stopRolePolling();
                 setTimeout(connectWebSocket, 1000);
             };
             
@@ -3059,13 +3063,18 @@ async fn serve_basic_html() -> Html<&'static str> {
                     const joinedNode = nodes.get(message.node_id);
                     if (joinedNode) {
                         joinedNode.teams = joinedNode.teams || [];
-                        joinedNode.teams.push(message.team);
+                        // Initially set role to null/undefined to indicate it needs to be queried
+                        const teamInfo = { ...message.team, role: null };
+                        joinedNode.teams.push(teamInfo);
                         const existingTeam = teams.get(message.team.id);
                         if (existingTeam) {
-                            existingTeam.members.push({ node_id: message.node_id, role: message.team.role || 'Member' });
+                            existingTeam.members.push({ node_id: message.node_id, role: 'Member' });
                         }
                         updateTeamsUI();
-                        draw();
+                        // Clear cache and trigger immediate role poll
+                        const joinCacheKey = `${message.node_id}-${message.team.id}`;
+                        roleCache.delete(joinCacheKey);
+                        pollNodeRoles();
                         
                         // Only show notification if not part of bulk operations
                         if (!window.pendingQuickSetup) {
@@ -3144,36 +3153,20 @@ async fn serve_basic_html() -> Html<&'static str> {
                 case 'RoleAssigned':
                     console.log('Received RoleAssigned message:', message);
                     showNotification(`Role ${message.role} assigned to device successfully`, 'success');
-                    // Update the target node with role information
-                    const targetNode = nodes.get(message.target_node_id);
-                    console.log('Target node found:', targetNode);
-                    if (targetNode && targetNode.teams) {
-                        // Find the team in the node's teams array and update the role
-                        const teamIndex = targetNode.teams.findIndex(t => t.id === message.team_id);
-                        console.log('Team index found:', teamIndex, 'for team ID:', message.team_id);
-                        if (teamIndex !== -1) {
-                            console.log('Updating role from', targetNode.teams[teamIndex].role, 'to', message.role);
-                            targetNode.teams[teamIndex].role = message.role;
-                        }
-                    }
-                    draw();
+                    // Clear the cache for this node-team combination to force a fresh query
+                    const cacheKey = `${message.target_node_id}-${message.team_id}`;
+                    roleCache.delete(cacheKey);
+                    // Trigger an immediate role poll to get the actual state
+                    pollNodeRoles();
                     break;
                 case 'RoleRevoked':
                     console.log('Received RoleRevoked message:', message);
                     showNotification(`Role revoked from device successfully (demoted to Member)`, 'success');
-                    // Update the target node
-                    const revokedTargetNode = nodes.get(message.target_node_id);
-                    console.log('Revoked target node found:', revokedTargetNode);
-                    if (revokedTargetNode && revokedTargetNode.teams) {
-                        // Find the team in the node's teams array and update the role
-                        const teamIndex = revokedTargetNode.teams.findIndex(t => t.id === message.team_id);
-                        console.log('Team index found for revocation:', teamIndex, 'for team ID:', message.team_id);
-                        if (teamIndex !== -1) {
-                            console.log('Updating role from', revokedTargetNode.teams[teamIndex].role, 'to Member');
-                            revokedTargetNode.teams[teamIndex].role = 'Member'; // Revocation always demotes to Member
-                        }
-                    }
-                    draw();
+                    // Clear the cache for this node-team combination to force a fresh query
+                    const revokedCacheKey = `${message.target_node_id}-${message.team_id}`;
+                    roleCache.delete(revokedCacheKey);
+                    // Trigger an immediate role poll to get the actual state
+                    pollNodeRoles();
                     break;
                 case 'TeamRolesResponse':
                     displayTeamRoles(message.team_id, message.devices);
@@ -3493,15 +3486,18 @@ async fn serve_basic_html() -> Html<&'static str> {
                 // Sort teams by role priority for consistent layering
                 const sortedTeams = [...node.teams].sort((a, b) => {
                     const roleOrder = { 'Owner': 0, 'Admin': 1, 'Operator': 2, 'Member': 3 };
-                    return roleOrder[a.role] - roleOrder[b.role];
+                    const aOrder = a.role ? (roleOrder[a.role] || 4) : 5; // null/undefined roles go last
+                    const bOrder = b.role ? (roleOrder[b.role] || 4) : 5;
+                    return aOrder - bOrder;
                 });
                 
                 sortedTeams.forEach((team, index) => {
                     // Use different colors for different roles
-                    let teamColor = '#2196F3'; // Member
+                    let teamColor = '#2196F3'; // Member (default)
                     if (team.role === 'Owner') teamColor = '#FF5722';
                     else if (team.role === 'Admin') teamColor = '#FF9800';
                     else if (team.role === 'Operator') teamColor = '#9C27B0';
+                    else if (!team.role) teamColor = '#808080'; // Gray for unknown/loading role
                     
                     // Draw outline ring - each role gets its own ring
                     ctx.strokeStyle = teamColor;
@@ -4871,6 +4867,103 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             if (messagePollingInterval) {
                 clearInterval(messagePollingInterval);
                 messagePollingInterval = null;
+            }
+        }
+
+        // Role polling functions
+        let rolePollingInterval = null;
+        const roleCache = new Map(); // nodeId-teamId -> { role, timestamp }
+        const ROLE_CACHE_TTL = 5000; // 5 seconds cache
+
+        function startRolePolling() {
+            if (rolePollingInterval) {
+                clearInterval(rolePollingInterval);
+            }
+            
+            // Poll every 2 seconds for role updates
+            rolePollingInterval = setInterval(pollNodeRoles, 2000);
+            
+            // Also poll immediately
+            setTimeout(pollNodeRoles, 100);
+        }
+
+        function stopRolePolling() {
+            if (rolePollingInterval) {
+                clearInterval(rolePollingInterval);
+                rolePollingInterval = null;
+            }
+        }
+
+        async function queryNodeRole(nodeId, teamId) {
+            const node = nodes.get(nodeId);
+            if (!node || node.status !== 'Running') {
+                return null;
+            }
+
+            // Check cache first
+            const cacheKey = `${nodeId}-${teamId}`;
+            const cached = roleCache.get(cacheKey);
+            if (cached && Date.now() - cached.timestamp < ROLE_CACHE_TTL) {
+                return cached.role;
+            }
+
+            try {
+                // First get the device ID for this node
+                const deviceIdResponse = await fetch(`http://127.0.0.1:${node.rest_port}/api/v1/device-id`);
+                if (!deviceIdResponse.ok) {
+                    console.warn(`Failed to get device ID for node ${nodeId}`);
+                    return null;
+                }
+                
+                const deviceIdData = await deviceIdResponse.json();
+                const deviceId = deviceIdData.device_id;
+
+                // Then query the role
+                const roleResponse = await fetch(`http://127.0.0.1:${node.rest_port}/api/v1/teams/${teamId}/devices/${deviceId}/role`);
+                if (!roleResponse.ok) {
+                    console.warn(`Failed to get role for device ${deviceId} in team ${teamId}`);
+                    return null;
+                }
+                
+                const role = await roleResponse.json();
+                
+                // Update cache
+                roleCache.set(cacheKey, { role, timestamp: Date.now() });
+                
+                return role;
+            } catch (error) {
+                console.error(`Error querying role for node ${nodeId}:`, error);
+                return null;
+            }
+        }
+
+        async function pollNodeRoles() {
+            const updatePromises = [];
+            
+            // Query roles for all running nodes in teams
+            nodes.forEach((node, nodeId) => {
+                if (node.status === 'Running' && node.teams && node.teams.length > 0) {
+                    node.teams.forEach((team, index) => {
+                        updatePromises.push(
+                            queryNodeRole(nodeId, team.id).then(role => {
+                                if (role && role !== team.role) {
+                                    // Update the local state with the actual role
+                                    node.teams[index].role = role;
+                                    return true; // Indicates a change
+                                }
+                                return false;
+                            })
+                        );
+                    });
+                }
+            });
+            
+            // Wait for all queries to complete
+            const results = await Promise.all(updatePromises);
+            
+            // Redraw if any roles changed
+            if (results.some(changed => changed)) {
+                draw();
             }
         }
 
