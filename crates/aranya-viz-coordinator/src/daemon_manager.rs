@@ -22,7 +22,7 @@ pub struct DaemonManager {
     state: AppState,
     daemon_handles: Arc<RwLock<HashMap<Uuid, DaemonHandle>>>,
     rest_handles: Arc<RwLock<HashMap<Uuid, tokio::process::Child>>>,
-    temp_dirs: Arc<RwLock<HashMap<Uuid, tempfile::TempDir>>>,
+    pub temp_dirs: Arc<RwLock<HashMap<Uuid, tempfile::TempDir>>>,
 }
 
 impl DaemonManager {

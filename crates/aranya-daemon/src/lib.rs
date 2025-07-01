@@ -42,6 +42,7 @@ mod api;
 mod aqc;
 mod daemon;
 mod keystore;
+mod sync_event_writer;
 
 pub use daemon::*;
 pub use keystore::AranyaStore;

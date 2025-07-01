@@ -17,7 +17,7 @@ use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_util::time::{delay_queue::Key, DelayQueue};
-use tracing::{error, instrument, trace};
+use tracing::{error, info, instrument, trace};
 
 use crate::{
     daemon::{Client, EF},
@@ -180,6 +180,16 @@ impl SyncPeers {
 
 type EffectSender = mpsc::Sender<(GraphId, Vec<EF>)>;
 
+/// Real sync event that occurred
+#[derive(Debug, Clone)]
+pub struct SyncEvent {
+    pub peer_addr: Addr,
+    pub graph_id: GraphId,
+    pub commands_count: usize,
+}
+
+pub type SyncEventSender = mpsc::UnboundedSender<SyncEvent>;
+
 /// Syncs with each peer after the specified interval.
 /// Uses a [`DelayQueue`] to obtain the next peer to sync with.
 /// Receives added/removed peers from [`SyncPeers`] via mpsc channels.
@@ -198,6 +208,8 @@ pub struct Syncer<ST> {
     invalid: InvalidGraphs,
     /// Additional state used by the syncer
     _state: ST,
+    /// Channel to send real sync events (when commands are received)
+    pub sync_event_tx: Option<SyncEventSender>,
 }
 
 struct PeerInfo {
@@ -240,10 +252,12 @@ impl<ST> Syncer<ST> {
                 send_effects,
                 invalid,
                 _state,
+                sync_event_tx: None,
             },
             peers,
         )
     }
+
 
     /// Add a peer to the delay queue, overwriting an existing one.
     fn add_peer(&mut self, peer: SyncPeer, cfg: &SyncPeerConfig) {
@@ -301,6 +315,7 @@ impl<ST: SyncState> Syncer<ST> {
     /// Sync with a peer.
     #[instrument(skip_all, fields(peer = ?peer))]
     pub(crate) async fn sync(&mut self, peer: &SyncPeer) -> Result<()> {
+        info!(peer_addr = %peer.addr, graph_id = %peer.graph_id, "sync_started");
         trace!("syncing with peer");
         let effects: Vec<EF> = {
             let mut sink = VecSink::new();
@@ -331,7 +346,11 @@ impl<ST: SyncState> Syncer<ST> {
             .send((peer.graph_id, effects))
             .await
             .context("unable to send effects")?;
+        
+        // Log sync completion with peer address for tracking
+        info!(peer_addr = %peer.addr, graph_id = %peer.graph_id, effects_count = n, "sync_completed");
         trace!(?n, "completed sync");
+        
         Ok(())
     }
 }

@@ -296,6 +296,7 @@ dependencies = [
  "clap",
  "deser-hjson",
  "futures-util",
+ "hex",
  "postcard",
  "pretty_assertions",
  "serde",

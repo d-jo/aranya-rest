@@ -11,6 +11,7 @@ use uuid::Uuid;
 pub mod coordinator;
 pub mod daemon_manager;
 pub mod websocket;
+pub mod sync_monitor;
 
 /// Represents a node in the visualization
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,6 +98,7 @@ pub enum WsMessage {
     SyncConnectionAdded { connection: SyncConnection },
     SyncConnectionRemoved { from: Uuid, to: Uuid, team_id: String },
     SyncConnectionStatusChanged { from: Uuid, to: Uuid, team_id: String, status: ConnectionStatus },
+    SyncOperationCompleted { from: Uuid, to: Uuid, team_id: String, effects_count: usize },
     
     // Team events
     TeamCreated { node_id: Uuid, team: TeamInfo },

@@ -17,6 +17,7 @@ use tracing::info;
 use crate::{
     daemon_manager::DaemonManager,
     websocket::websocket_handler,
+    sync_monitor::SyncMonitor,
     AppState, AppStateInner, WsMessage,
 };
 
@@ -40,6 +41,10 @@ impl Coordinator {
         
         // Create broadcast channel for WebSocket messages
         let (tx, _rx) = broadcast::channel::<WsMessage>(1000);
+        
+        // Start sync monitor for animations
+        let sync_monitor = SyncMonitor::new(state.clone(), tx.clone(), daemon_manager.clone());
+        tokio::spawn(sync_monitor.start());
 
         // Build router
         let mut router = Router::new()
@@ -2782,6 +2787,71 @@ async fn serve_basic_html() -> Html<&'static str> {
         let canvas = null;
         let ctx = null;
         
+        // Animation state for sync operations
+        let syncAnimations = new Map(); // Map of connection key to animation state
+        let animationFrame = null;
+        
+        class SyncAnimation {
+            constructor(from, to, teamId) {
+                this.from = from;
+                this.to = to;
+                this.teamId = teamId;
+                this.progress = 0;
+                this.duration = 2000; // 2 second animation
+                this.startTime = Date.now();
+                this.particles = [];
+                
+                // Initialize particles
+                for (let i = 0; i < 5; i++) {
+                    this.particles.push({
+                        offset: i * 0.2,
+                        size: 4 + Math.random() * 4
+                    });
+                }
+            }
+            
+            update() {
+                const elapsed = Date.now() - this.startTime;
+                this.progress = Math.min(elapsed / this.duration, 1);
+                return this.progress < 1;
+            }
+        }
+        
+        // Start a sync animation
+        function startSyncAnimation(from, to, teamId) {
+            const key = `${from}-${to}-${teamId}`;
+            syncAnimations.set(key, new SyncAnimation(from, to, teamId));
+            
+            // Start animation loop if not running
+            if (!animationFrame) {
+                animate();
+            }
+        }
+        
+        // Animation loop
+        function animate() {
+            let hasActiveAnimations = false;
+            
+            // Update all active animations
+            syncAnimations.forEach((animation, key) => {
+                if (!animation.update()) {
+                    syncAnimations.delete(key);
+                } else {
+                    hasActiveAnimations = true;
+                }
+            });
+            
+            // Redraw canvas with animations
+            draw();
+            
+            // Continue animation loop if needed
+            if (hasActiveAnimations) {
+                animationFrame = requestAnimationFrame(animate);
+            } else {
+                animationFrame = null;
+            }
+        }
+        
         // Initialize canvas size
         function initializeCanvas() {
             // Get canvas if not already initialized
@@ -3031,6 +3101,10 @@ async fn serve_basic_html() -> Html<&'static str> {
                 case 'SyncConnectionRemoved':
                     connections.delete(`${message.from}-${message.to}-${message.team_id}`);
                     draw();
+                    break;
+                case 'SyncOperationCompleted':
+                    // Start animation for the sync operation
+                    startSyncAnimation(message.from, message.to, message.team_id);
                     break;
                 case 'TeamCreated':
                     const team = message.team;
@@ -3375,8 +3449,13 @@ async fn serve_basic_html() -> Html<&'static str> {
                     if (fromNode && toNode) {
                         const color = conn.status === 'Connected' ? '#4CAF50' : 
                                      conn.status === 'Failed' ? '#F44336' : '#FF9800';
+                        
+                        // Check if this connection has an active animation
+                        const animKey = `${conn.from}-${conn.to}-${conn.team_id}`;
+                        const animation = syncAnimations.get(animKey);
+                        
                         // Draw arrow from source (to) to syncer (from) to show data flow direction
-                        drawArrow(toNode, fromNode, color);
+                        drawArrow(toNode, fromNode, color, animation);
                     }
                 });
             }
@@ -3603,7 +3682,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             return img;
         }
 
-        function drawArrow(fromNode, toNode, color = '#666') {
+        function drawArrow(fromNode, toNode, color = '#666', animation = null) {
             const headlen = 10;
             const dx = toNode.position.x - fromNode.position.x;
             const dy = toNode.position.y - fromNode.position.y;
@@ -3637,6 +3716,54 @@ async fn serve_basic_html() -> Html<&'static str> {
             ctx.moveTo(endX, endY);
             ctx.lineTo(endX - headlen * Math.cos(angle + Math.PI / 6), endY - headlen * Math.sin(angle + Math.PI / 6));
             ctx.stroke();
+            
+            // Draw animation effects if present
+            if (animation) {
+                drawSyncAnimation(startX, startY, endX, endY, animation);
+            }
+        }
+        
+        // Draw sync animation particles
+        function drawSyncAnimation(startX, startY, endX, endY, animation) {
+            const dx = endX - startX;
+            const dy = endY - startY;
+            
+            ctx.save();
+            
+            // Draw particles flowing along the arrow
+            animation.particles.forEach(particle => {
+                const t = (animation.progress + particle.offset) % 1;
+                const x = startX + dx * t;
+                const y = startY + dy * t;
+                
+                // Fade in and out
+                const alpha = Math.sin(t * Math.PI) * 0.8;
+                
+                // Glow effect
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#4CAF50';
+                
+                // Draw particle
+                ctx.fillStyle = `rgba(76, 175, 80, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(x, y, particle.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Draw pulse effect at the arrow
+            if (animation.progress < 0.5) {
+                const pulseAlpha = (1 - animation.progress * 2) * 0.3;
+                ctx.strokeStyle = `rgba(76, 175, 80, ${pulseAlpha})`;
+                ctx.lineWidth = 4 + animation.progress * 10;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#4CAF50';
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+            }
+            
+            ctx.restore();
         }
 
         // Coordinate transformation functions
