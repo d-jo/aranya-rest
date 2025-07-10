@@ -3219,9 +3219,10 @@ async fn serve_basic_html() -> Html<&'static str> {
                             updateRecentMessages();
                         }
                         
-                        // Show bubble on receiving node 
+                        // Show bubble on receiving node only if it's not the sender
+                        // (sender already showed bubble via MessageSent event)
                         const receivingNode = nodes.get(message.node_id);
-                        if (receivingNode) {
+                        if (receivingNode && actualSenderId !== message.node_id) {
                             console.log(`📨 Node ${receivingNode.name} received message: "${receivedMessage.text}" from ${authorDisplay}`);
                             showMessageBubble(message.node_id, receivedMessage.text, authorDisplay);
                         }
