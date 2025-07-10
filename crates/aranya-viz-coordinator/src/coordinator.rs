@@ -1400,7 +1400,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                 </div>
                 <h1>Aranya Visualization</h1>
             </div>
-            <p>Click to place nodes. Drag to move them. Pan by dragging empty space. Zoom with mouse wheel. Right-click for options.</p>
+            <p>Click to place devices. Drag to move them. Pan by dragging empty space. Zoom with mouse wheel. Right-click for options.</p>
         </div>
         
         <div class="main-content">
@@ -1445,12 +1445,12 @@ async fn serve_basic_html() -> Html<&'static str> {
                                     </div>
                                     
                                     <div class="node-icons-header">
-                                        <h5>🎯 Node Icons</h5>
+                                        <h5>🎯 Device Icons</h5>
                                         <button id="toggleNodeIcons" class="toggle-btn">▼</button>
                                     </div>
                                     <div id="nodeIconSection" class="node-icon-section">
                                         <div class="form-group">
-                                            <label>Default Icon for New Nodes:</label>
+                                            <label>Default Icon for New Devices:</label>
                                             <input type="text" id="defaultNodeIcon" value="🔵" placeholder="🔵" class="icon-input">
                                         </div>
                                         <div id="individualNodeIcons" class="individual-icons"></div>
@@ -1502,9 +1502,9 @@ async fn serve_basic_html() -> Html<&'static str> {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="messageSenderSelector">Sender Node:</label>
+                                <label for="messageSenderSelector">Sender Device:</label>
                                 <select id="messageSenderSelector">
-                                    <option value="">-- Select Sender Node --</option>
+                                    <option value="">-- Select Sender Device --</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -1541,15 +1541,15 @@ async fn serve_basic_html() -> Html<&'static str> {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="roleActingNodeSelector">Acting Node (who assigns):</label>
+                                <label for="roleActingNodeSelector">Acting Device (who assigns):</label>
                                 <select id="roleActingNodeSelector">
-                                    <option value="">-- Select Acting Node --</option>
+                                    <option value="">-- Select Acting Device --</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="roleTargetNodeSelector">Target Node (who gets role):</label>
+                                <label for="roleTargetNodeSelector">Target Device (who gets role):</label>
                                 <select id="roleTargetNodeSelector">
-                                    <option value="">-- Select Target Node --</option>
+                                    <option value="">-- Select Target Device --</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -1579,9 +1579,9 @@ async fn serve_basic_html() -> Html<&'static str> {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="deviceRemovalActingNodeSelector">Acting Node (who performs removal):</label>
+                                <label for="deviceRemovalActingNodeSelector">Acting Device (who performs removal):</label>
                                 <select id="deviceRemovalActingNodeSelector">
-                                    <option value="">-- Select Acting Node --</option>
+                                    <option value="">-- Select Acting Device --</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -1616,15 +1616,15 @@ async fn serve_basic_html() -> Html<&'static str> {
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="syncFromNodeSelector">From Node:</label>
+                                <label for="syncFromNodeSelector">From Device:</label>
                                 <select id="syncFromNodeSelector">
-                                    <option value="">-- Select Source Node --</option>
+                                    <option value="">-- Select Source Device --</option>
                                 </select>
                             </div>
                             <div class="form-group">
-                                <label for="syncToNodeSelector">To Node:</label>
+                                <label for="syncToNodeSelector">To Device:</label>
                                 <select id="syncToNodeSelector">
-                                    <option value="">-- Select Target Node --</option>
+                                    <option value="">-- Select Target Device --</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -1650,7 +1650,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                                     <label for="customSyncUrl">Custom Peer URL:</label>
                                     <input type="text" id="customSyncUrl" placeholder="http://192.168.1.100:8080">
                                     <small style="display: block; color: var(--text-secondary); margin-top: 0.25rem;">
-                                        Use this to sync with nodes outside the visualization
+                                        Use this to sync with devices outside the visualization
                                     </small>
                                 </div>
                             </div>
@@ -1669,9 +1669,9 @@ async fn serve_basic_html() -> Html<&'static str> {
                 <div class="canvas-header">
                     <div class="controls">
                         <button onclick="selectTool('select')" id="selectTool" class="btn active">✋ Select/Move</button>
-                        <button onclick="selectTool('place')" id="placeTool" class="btn">➕ Place Node</button>
+                        <button onclick="selectTool('place')" id="placeTool" class="btn">➕ Place Device</button>
                         <button onclick="selectTool('connect')" id="connectTool" class="btn">🔗 Connect</button>
-                        <input type="text" id="nodeNameInput" placeholder="Node name..." value="" style="max-width: 150px;">
+                        <input type="text" id="nodeNameInput" placeholder="Device name..." value="" style="max-width: 150px;">
                     </div>
                     <div class="controls">
                         <button onclick="clearAll()" class="btn">🗑️ Clear All</button>
@@ -1700,7 +1700,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                             <input type="text" id="createNodeIcon" placeholder="🔵" maxlength="2" style="width: 40px;">
                         </div>
                         <div class="ribbon-group" style="border: none; padding-left: 1rem;">
-                            <span style="font-style: italic; color: var(--text-secondary);">💡 New node will auto-start and join selected team</span>
+                            <span style="font-style: italic; color: var(--text-secondary);">💡 New device will auto-start and join selected team</span>
                         </div>
                     </div>
                     
@@ -1736,7 +1736,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                             </label>
                         </div>
                         <div class="ribbon-group" style="border: none; padding-left: 1rem;">
-                            <span id="connectHelpText" style="font-style: italic; color: var(--text-secondary);">💡 Hold Shift+Drag to connect multiple nodes</span>
+                            <span id="connectHelpText" style="font-style: italic; color: var(--text-secondary);">💡 Hold Shift+Drag to connect multiple devices</span>
                         </div>
                     </div>
                 </div>
@@ -1766,7 +1766,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                             </div>
                             <div class="btn-grid">
                                 <select id="nodeSelector" class="form-group">
-                                    <option value="">-- Select Node --</option>
+                                    <option value="">-- Select Device --</option>
                                 </select>
                                 <button onclick="createTeamFromUI()" class="btn btn-primary">Create Team</button>
                             </div>
@@ -1779,7 +1779,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                             </div>
                             <div class="btn-grid">
                                 <select id="joinNodeSelector" class="form-group">
-                                    <option value="">-- Select Node --</option>
+                                    <option value="">-- Select Device --</option>
                                 </select>
                                 <button onclick="joinTeamFromUI()" class="btn btn-primary">Join Team</button>
                             </div>
@@ -1807,7 +1807,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                             
                             <div class="btn-grid">
                                 <button onclick="addAllNodesToSelectedTeam()" class="btn btn-success btn-full">
-                                    Add All Nodes to Team
+                                    Add All Devices to Team
                                 </button>
                                 <button onclick="autoSyncTeamMembers()" class="btn btn-primary">
                                     Auto-Sync All
@@ -1860,12 +1860,12 @@ async fn serve_basic_html() -> Html<&'static str> {
     </div>
 
     <div class="context-menu" id="contextMenu">
-        <div class="context-menu-item" onclick="deleteSelectedNode()">Delete Node</div>
+        <div class="context-menu-item" onclick="deleteSelectedNode()">Delete Device</div>
         <div class="context-menu-item" onclick="createTeamForNode()">Create Team</div>
         <div class="context-menu-item" onclick="joinTeamDialog()">Join Team</div>
         <div class="context-menu-item" onclick="removeSyncPeers()">Remove Sync Peers</div>
-        <div class="context-menu-item" onclick="sendMessageToNode()">Send Message</div>
-        <div class="context-menu-item" onclick="viewNodeInfo()">View Info</div>
+        <div class="context-menu-item" onclick="sendMessageToDevice()">Send Message</div>
+        <div class="context-menu-item" onclick="viewDeviceInfo()">View Info</div>
     </div>
 
     <script>
@@ -2060,7 +2060,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             container.innerHTML = '';
             
             if (nodes.size === 0) {
-                container.innerHTML = '<div style="color: var(--text-secondary); font-style: italic; font-size: 0.875rem;">No nodes available. Create some nodes first.</div>';
+                container.innerHTML = '<div style="color: var(--text-secondary); font-style: italic; font-size: 0.875rem;">No devices available. Create some devices first.</div>';
                 return;
             }
             
@@ -2074,7 +2074,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                 
                 const nodeLabel = document.createElement('span');
                 nodeLabel.className = 'node-id';
-                nodeLabel.textContent = `${node.name || 'Node'} (${nodeId.slice(0, 8)}...)`;
+                nodeLabel.textContent = `${node.name || 'Device'} (${nodeId.slice(0, 8)}...)`;
                 nodeLabel.title = `Node ID: ${nodeId}`;
                 
                 header.appendChild(nodeLabel);
@@ -2146,7 +2146,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                 const uploadBtn = document.createElement('button');
                 uploadBtn.className = 'icon-upload-btn';
                 uploadBtn.textContent = '📁 Image';
-                uploadBtn.title = 'Upload image for this node';
+                uploadBtn.title = 'Upload image for this device';
                 uploadBtn.addEventListener('click', () => {
                     fileInput.click();
                 });
@@ -2231,11 +2231,11 @@ async fn serve_basic_html() -> Html<&'static str> {
             if (section.classList.contains('collapsed')) {
                 section.classList.remove('collapsed');
                 toggleBtn.textContent = '▼';
-                toggleBtn.title = 'Collapse node icons';
+                toggleBtn.title = 'Collapse device icons';
             } else {
                 section.classList.add('collapsed');
                 toggleBtn.textContent = '▶';
-                toggleBtn.title = 'Expand node icons';
+                toggleBtn.title = 'Expand device icons';
             }
         }
         
@@ -2958,7 +2958,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
             
             ws.onopen = function() {
-                document.getElementById('status').textContent = 'Connected. Click to place nodes!';
+                document.getElementById('status').textContent = 'Connected. Click to place devices!';
                 ws.send(JSON.stringify({ type: 'GetState' }));
                 // Start message polling after connection
                 setTimeout(startMessagePolling, 2000);
@@ -3223,7 +3223,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                         // (sender already showed bubble via MessageSent event)
                         const receivingNode = nodes.get(message.node_id);
                         if (receivingNode && actualSenderId !== message.node_id) {
-                            console.log(`📨 Node ${receivingNode.name} received message: "${receivedMessage.text}" from ${authorDisplay}`);
+                            console.log(`📨 Device ${receivingNode.name} received message: "${receivedMessage.text}" from ${authorDisplay}`);
                             showMessageBubble(message.node_id, receivedMessage.text, authorDisplay);
                         }
                     }
@@ -3837,7 +3837,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                     // Get node name from tool args or fallback to main input
                     const toolArgsName = document.getElementById('createNodeName').value.trim();
                     const nameInput = document.getElementById('nodeNameInput');
-                    const fallbackName = nameInput.value.trim() || `Node${nodes.size + 1}`;
+                    const fallbackName = nameInput.value.trim() || `Device${nodes.size + 1}`;
                     const name = toolArgsName || fallbackName;
                     
                     // Get other tool args
@@ -3950,7 +3950,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                     connectStart = null;
                     e.preventDefault(); // Prevent default click behavior
                 } else if (!connectStart) {
-                    showNotification('Click on a node first to set the connection origin', 'warning');
+                    showNotification('Click on a device first to set the connection origin', 'warning');
                 }
             }
         });
@@ -4133,7 +4133,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             }
         }
 
-        function viewNodeInfo() {
+        function viewDeviceInfo() {
             if (contextMenuNode) {
                 const node = nodes.get(contextMenuNode);
                 if (node) {
@@ -4150,7 +4150,7 @@ Status: ${JSON.stringify(node.status)}<br>
 Daemon Port: ${node.daemon_port}<br>
 REST Port: ${node.rest_port}<br>
 Connections: ${incomingCount} in, ${outgoingCount} out`;
-                    showNotification(info, 'info', 'Node Information');
+                    showNotification(info, 'info', 'Device Information');
                 }
                 document.getElementById('contextMenu').style.display = 'none';
             }
@@ -4178,11 +4178,11 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             // Update instructions
             const header = document.querySelector('.header p');
             if (tool === 'select') {
-                header.textContent = 'Click and drag to move nodes. Right-click for options.';
+                header.textContent = 'Click and drag to move devices. Right-click for options.';
             } else if (tool === 'place') {
-                header.textContent = 'Click on empty space to place a new node.';
+                header.textContent = 'Click on empty space to place a new device.';
             } else if (tool === 'connect') {
-                header.textContent = 'Click on receiver node, then click on source node. Arrow shows data flow direction.';
+                header.textContent = 'Click on receiver device, then click on source device. Arrow shows data flow direction.';
             }
             
             draw();
@@ -4348,12 +4348,12 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             // Update node selector for team creation
             const nodeSelector = document.getElementById('nodeSelector');
             const currentNodeValue = nodeSelector.value;
-            nodeSelector.innerHTML = '<option value="">-- Select Node --</option>';
+            nodeSelector.innerHTML = '<option value="">-- Select Device --</option>';
             
             // Update join node selector
             const joinNodeSelector = document.getElementById('joinNodeSelector');
             const currentJoinNodeValue = joinNodeSelector.value;
-            joinNodeSelector.innerHTML = '<option value="">-- Select Node --</option>';
+            joinNodeSelector.innerHTML = '<option value="">-- Select Device --</option>';
             
             nodes.forEach(node => {
                 // Add to create team selector (only running nodes)
@@ -4459,7 +4459,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             const teamName = teamNameInput.value.trim();
             
             if (!nodeId) {
-                showNotification('Please select a node to create the team.', 'warning');
+                showNotification('Please select a device to create the team.', 'warning');
                 return;
             }
             
@@ -4487,7 +4487,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             const teamId = availableTeamsSelector.value;
             
             if (!nodeId) {
-                showNotification('Please select a node to join the team.', 'warning');
+                showNotification('Please select a device to join the team.', 'warning');
                 return;
             }
             
@@ -4510,7 +4510,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             }));
             
             const node = nodes.get(nodeId);
-            showNotification(`Adding ${node ? node.name : 'node'} to team "${team.name}"...`, 'info');
+            showNotification(`Adding ${node ? node.name : 'device'} to team "${team.name}"...`, 'info');
         }
 
         function addAllNodesToSelectedTeam() {
@@ -4538,11 +4538,11 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             });
 
             if (nodesToAdd.length === 0) {
-                showNotification('All running nodes are already in this team.', 'info');
+                showNotification('All running devices are already in this team.', 'info');
                 return;
             }
 
-            if (confirm(`Add ${nodesToAdd.length} nodes to team "${team.name}"?`)) {
+            if (confirm(`Add ${nodesToAdd.length} devices to team "${team.name}"?`)) {
                 // Suppress notifications during bulk operation
                 suppressNotifications = true;
                 
@@ -4558,7 +4558,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                 // Show single notification after operations are sent
                 setTimeout(() => {
                     suppressNotifications = false;
-                    showNotification(`Adding ${nodesToAdd.length} nodes to team "${team.name}"`, 'success');
+                    showNotification(`Adding ${nodesToAdd.length} devices to team "${team.name}"`, 'success');
                 }, 100);
             }
         }
@@ -4584,7 +4584,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             });
 
             if (teamNodes.length < 2) {
-                showNotification('Need at least 2 nodes in the team to create sync connections.', 'warning');
+                showNotification('Need at least 2 devices in the team to create sync connections.', 'warning');
                 return;
             }
 
@@ -4651,7 +4651,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             // Find the owner node
             const ownerNode = nodes.get(team.owner_node_id);
             if (!ownerNode || ownerNode.status !== 'Running') {
-                showNotification('Team owner node is not running. Cannot create sync connections.', 'error');
+                showNotification('Team owner device is not running. Cannot create sync connections.', 'error');
                 return;
             }
 
@@ -4667,7 +4667,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             });
 
             if (memberNodes.length === 0) {
-                showNotification('No other running team members found. Add more nodes to the team first.', 'warning');
+                showNotification('No other running team members found. Add more devices to the team first.', 'warning');
                 return;
             }
 
@@ -4717,11 +4717,11 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             });
 
             if (runningNodes.length === 0) {
-                showNotification('No running nodes available. Place and start some nodes first.', 'warning');
+                showNotification('No running devices available. Place and start some devices first.', 'warning');
                 return;
             }
 
-            const teamName = prompt(`Quick Team Setup\n\nThis will:\n1. Create a new team with ${runningNodes[0].name} as owner\n2. Add all ${runningNodes.length} running nodes to the team\n3. Set up sync connections from members to owner\n\nEnter team name (or cancel):`);
+            const teamName = prompt(`Quick Team Setup\n\nThis will:\n1. Create a new team with ${runningNodes[0].name} as owner\n2. Add all ${runningNodes.length} running devices to the team\n3. Set up sync connections from members to owner\n\nEnter team name (or cancel):`);
             
             if (!teamName || !teamName.trim()) {
                 return;
@@ -4781,7 +4781,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                     // Re-enable notifications and show final success
                     setTimeout(() => {
                         suppressNotifications = false;
-                        showNotification(`Team "${setup.teamName}" setup complete with ${setup.allNodes.length} nodes!`, 'success', 'Quick Team Setup');
+                        showNotification(`Team "${setup.teamName}" setup complete with ${setup.allNodes.length} devices!`, 'success', 'Quick Team Setup');
                         
                         // Clear pending setup AFTER everything is done
                         delete window.pendingQuickSetup;
@@ -4809,7 +4809,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             const teamSelector = document.getElementById('messageTeamSelector');
             const currentSenderValue = senderSelector.value;
             
-            senderSelector.innerHTML = '<option value="">-- Select Sender Node --</option>';
+            senderSelector.innerHTML = '<option value="">-- Select Sender Device --</option>';
             
             const selectedTeamId = teamSelector.value;
             if (selectedTeamId) {
@@ -4834,18 +4834,18 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             updateSendButtonState();
         }
 
-        function sendMessageToNode() {
+        function sendMessageToDevice() {
             if (!contextMenuNode) return;
             
             const node = nodes.get(contextMenuNode);
             if (!node || !node.teams || node.teams.length === 0) {
-                showNotification('This node is not part of any team. Join a team first to send messages.', 'warning');
+                showNotification('This device is not part of any team. Join a team first to send messages.', 'warning');
                 document.getElementById('contextMenu').style.display = 'none';
                 return;
             }
             
             // Show available teams for this node
-            let teamOptions = 'Available teams for this node:\n';
+            let teamOptions = 'Available teams for this device:\n';
             node.teams.forEach(team => {
                 teamOptions += `- ${team.name} (Role: ${team.role})\n`;
             });
@@ -5292,7 +5292,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             if (ws && ws.readyState === WebSocket.OPEN) {
                 console.log('Sending AssignRole message:', payload);
                 ws.send(JSON.stringify(payload));
-                showNotification(`Assigning ${role} role to target node`, 'success');
+                showNotification(`Assigning ${role} role to target device`, 'success');
             } else {
                 showNotification('WebSocket not connected', 'error');
             }
@@ -5320,7 +5320,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             if (ws && ws.readyState === WebSocket.OPEN) {
                 console.log('Sending RevokeRole message:', payload);
                 ws.send(JSON.stringify(payload));
-                showNotification(`Revoking ${role} role from target node`, 'success');
+                showNotification(`Revoking ${role} role from target device`, 'success');
             } else {
                 showNotification('WebSocket not connected', 'error');
             }
@@ -5593,7 +5593,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             // Role acting node selector - only show nodes in the selected team
             const roleActingNodeSelector = document.getElementById('roleActingNodeSelector');
             const currentActingNodeValue = roleActingNodeSelector.value;
-            roleActingNodeSelector.innerHTML = '<option value="">-- Select Acting Node --</option>';
+            roleActingNodeSelector.innerHTML = '<option value="">-- Select Acting Device --</option>';
             
             if (teamId) {
                 nodes.forEach((node, id) => {
@@ -5601,7 +5601,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                         const teamInfo = node.teams.find(t => t.id === teamId);
                         const option = document.createElement('option');
                         option.value = id;
-                        option.textContent = `${node.name || `Node ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        option.textContent = `${node.name || `Device ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
                         roleActingNodeSelector.appendChild(option);
                     }
                 });
@@ -5614,7 +5614,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             // Role target node selector - show all nodes in the team
             const roleTargetNodeSelector = document.getElementById('roleTargetNodeSelector');
             const currentTargetNodeValue = roleTargetNodeSelector.value;
-            roleTargetNodeSelector.innerHTML = '<option value="">-- Select Target Node --</option>';
+            roleTargetNodeSelector.innerHTML = '<option value="">-- Select Target Device --</option>';
             
             if (teamId) {
                 nodes.forEach((node, id) => {
@@ -5622,7 +5622,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                         const teamInfo = node.teams.find(t => t.id === teamId);
                         const option = document.createElement('option');
                         option.value = id;
-                        option.textContent = `${node.name || `Node ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        option.textContent = `${node.name || `Device ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
                         roleTargetNodeSelector.appendChild(option);
                     }
                 });
@@ -5639,7 +5639,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             // Device removal acting node selector - only show nodes in the selected team
             const deviceRemovalActingSelector = document.getElementById('deviceRemovalActingNodeSelector');
             const currentRemovalActingValue = deviceRemovalActingSelector.value;
-            deviceRemovalActingSelector.innerHTML = '<option value="">-- Select Acting Node --</option>';
+            deviceRemovalActingSelector.innerHTML = '<option value="">-- Select Acting Device --</option>';
             
             if (teamId) {
                 nodes.forEach((node, id) => {
@@ -5647,7 +5647,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                         const teamInfo = node.teams.find(t => t.id === teamId);
                         const option = document.createElement('option');
                         option.value = id;
-                        option.textContent = `${node.name || `Node ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        option.textContent = `${node.name || `Device ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
                         deviceRemovalActingSelector.appendChild(option);
                     }
                 });
@@ -5668,7 +5668,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                         const teamInfo = node.teams.find(t => t.id === teamId);
                         const option = document.createElement('option');
                         option.value = id;
-                        option.textContent = `${node.name || `Node ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        option.textContent = `${node.name || `Device ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
                         deviceRemovalSelector.appendChild(option);
                     }
                 });
@@ -5704,7 +5704,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             // From node selector - only show nodes in the selected team
             const syncFromNodeSelector = document.getElementById('syncFromNodeSelector');
             const currentFromValue = syncFromNodeSelector.value;
-            syncFromNodeSelector.innerHTML = '<option value="">-- Select Source Node --</option>';
+            syncFromNodeSelector.innerHTML = '<option value="">-- Select Source Device --</option>';
             
             if (teamId) {
                 nodes.forEach((node, id) => {
@@ -5712,7 +5712,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                         const teamInfo = node.teams.find(t => t.id === teamId);
                         const option = document.createElement('option');
                         option.value = id;
-                        option.textContent = `${node.name || `Node ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        option.textContent = `${node.name || `Device ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
                         syncFromNodeSelector.appendChild(option);
                     }
                 });
@@ -5725,7 +5725,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             // To node selector - only show nodes in the selected team
             const syncToNodeSelector = document.getElementById('syncToNodeSelector');
             const currentToValue = syncToNodeSelector.value;
-            syncToNodeSelector.innerHTML = '<option value="">-- Select Target Node --</option>';
+            syncToNodeSelector.innerHTML = '<option value="">-- Select Target Device --</option>';
             
             if (teamId) {
                 nodes.forEach((node, id) => {
@@ -5733,7 +5733,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                         const teamInfo = node.teams.find(t => t.id === teamId);
                         const option = document.createElement('option');
                         option.value = id;
-                        option.textContent = `${node.name || `Node ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        option.textContent = `${node.name || `Device ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
                         syncToNodeSelector.appendChild(option);
                     }
                 });
@@ -5768,7 +5768,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                 if (multiConnectTargets.includes(nodeId)) return; // Skip already added nodes
                 
                 const distance = Math.sqrt(Math.pow(x - node.position.x, 2) + Math.pow(y - node.position.y, 2));
-                console.log(`  Node ${getNodeName(nodeId) || nodeId.substring(0,8)} at (${node.position.x.toFixed(1)}, ${node.position.y.toFixed(1)}) - distance: ${distance.toFixed(1)}`);
+                console.log(`  Device ${getNodeName(nodeId) || nodeId.substring(0,8)} at (${node.position.x.toFixed(1)}, ${node.position.y.toFixed(1)}) - distance: ${distance.toFixed(1)}`);
                 
                 if (distance <= DETECTION_RADIUS) {
                     multiConnectTargets.push(nodeId);
@@ -5883,7 +5883,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             if (e.key === 'Shift') {
                 shiftPressed = true;
                 if (currentTool === 'connect') {
-                    document.querySelector('.header p').textContent = 'Shift+Drag to connect multiple nodes in one action';
+                    document.querySelector('.header p').textContent = 'Shift+Drag to connect multiple devices in one action';
                 }
             }
         });
@@ -5892,7 +5892,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             if (e.key === 'Shift') {
                 shiftPressed = false;
                 if (currentTool === 'connect') {
-                    document.querySelector('.header p').textContent = 'Click on receiver node, then click on source node. Arrow shows data flow direction.';
+                    document.querySelector('.header p').textContent = 'Click on receiver device, then click on source device. Arrow shows data flow direction.';
                 }
                 // Cancel multi-connect if in progress
                 if (isMultiConnecting) {
