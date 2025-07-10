@@ -4896,14 +4896,21 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             bubble.innerHTML = `<strong>${authorName}:</strong> ${message}`;
             bubble.dataset.nodeId = nodeId; // Store node ID for position updates
             
-            // Add bubble to DOM first
-            document.body.appendChild(bubble);
-            
             // Store bubble reference
             if (!messageBubbles.has(nodeId)) {
                 messageBubbles.set(nodeId, []);
             }
-            messageBubbles.get(nodeId).push(bubble);
+            
+            // Calculate bubble index for stacking
+            const existingBubbles = messageBubbles.get(nodeId);
+            const bubbleIndex = existingBubbles.length;
+            bubble.dataset.bubbleIndex = bubbleIndex; // Store index for position calculations
+            
+            // Add bubble to DOM first
+            document.body.appendChild(bubble);
+            
+            // Add to tracking array
+            existingBubbles.push(bubble);
             
             // Position bubble after it's in the DOM and has dimensions
             // Use requestAnimationFrame to ensure the bubble is rendered
@@ -4930,6 +4937,11 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                         if (index > -1) {
                             bubbles.splice(index, 1);
                         }
+                        // Update indices of remaining bubbles
+                        bubbles.forEach((b, i) => {
+                            b.dataset.bubbleIndex = i;
+                            updateMessageBubblePosition(b, node);
+                        });
                         if (bubbles.length === 0) {
                             messageBubbles.delete(nodeId);
                         }
@@ -4948,10 +4960,14 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             const bubbleWidth = bubbleRect.width || 200; // fallback width
             const bubbleHeight = bubbleRect.height || 40; // fallback height
             
+            // Get bubble index for stacking
+            const bubbleIndex = parseInt(bubble.dataset.bubbleIndex) || 0;
+            const stackOffset = bubbleIndex * (bubbleHeight + 10); // 10px spacing between bubbles
+            
             // Center the bubble horizontally on the node
             bubble.style.left = (rect.left + screenPos.x - bubbleWidth / 2) + 'px';
-            // Position bubble above the node (node radius is 30px, plus spacing for the arrow)
-            bubble.style.top = (rect.top + screenPos.y - 30 - bubbleHeight - 10) + 'px';
+            // Position bubble above the node with stacking offset
+            bubble.style.top = (rect.top + screenPos.y - 30 - bubbleHeight - 10 - stackOffset) + 'px';
         }
         
         function updateAllMessageBubbles() {
