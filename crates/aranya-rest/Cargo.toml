@@ -12,30 +12,39 @@ name = "multi-daemon"
 path = "src/bin/multi-daemon.rs"
 
 [dependencies]
-aranya-daemon-api = { path = "../aranya-daemon-api" }
-aranya-util = { path = "../aranya-util" }
-aranya-crypto = { version = "0.7.1", features = ["alloc", "aqc", "fs-keystore", "clone-aead", "std"] }
+# Aranya v4.0.0 dependencies
+aranya-client = { version = "4.0.0", features = ["afc"] }
+aranya-daemon-api = { version = "4.0.0" }
+aranya-crypto = { version = "0.16.0", features = ["alloc", "std"] }
+aranya-fast-channels = { version = "0.16.0" }
+
+# Web framework
 anyhow = "1.0"
 axum = "0.8"
 tokio = { version = "1.0", features = ["full"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-tarpc = { version = "0.35.0", features = ["unix", "serde-transport", "serde-transport-json"] }
-futures-util = "0.3"
-uuid = { version = "1.0", features = ["v4", "serde"] }
 hex = "0.4"
 base64 = "0.22"
+
+# RPC
+tarpc = { version = "0.35.0", features = ["unix", "serde-transport", "serde-transport-json"] }
+futures-util = "0.3"
+
+# Utilities
+uuid = { version = "1.0", features = ["v4", "serde"] }
 clap = { version = "4.0", features = ["derive"] }
-thiserror = "1.0"
+thiserror = "2.0"
 tempfile = "3.6.0"
 postcard = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
-aranya-client = { path = "../aranya-client" }
 aranya-daemon = { path = "../aranya-daemon" }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 backon = "1.2.0"
