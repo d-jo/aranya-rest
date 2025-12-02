@@ -114,6 +114,7 @@ pub struct Daemon {
     syncer: Syncer<TCPSyncState>,
     api: DaemonApiServer,
     span: tracing::Span,
+    sync_event_writer: Option<crate::sync_event_writer::SyncEventWriter>,
 }
 
 impl Daemon {
@@ -155,12 +156,19 @@ impl Daemon {
             // Sync in the background at some specified interval.
             let (send_effects, recv_effects) = tokio::sync::mpsc::channel(256);
             let invalid_graphs = InvalidGraphs::default();
-            let (syncer, peers) = Syncer::new(
+            
+            // Create sync event writer for animations
+            let (sync_event_tx, sync_event_writer) = crate::sync_event_writer::SyncEventWriter::new(&cfg.runtime_dir);
+            
+            let (mut syncer, peers) = Syncer::new(
                 client.clone(),
                 send_effects,
                 invalid_graphs.clone(),
                 TCPSyncState,
             );
+            
+            // Set the sync event sender
+            syncer.sync_event_tx = Some(sync_event_tx);
 
             let graph_ids = client
                 .aranya
@@ -204,6 +212,7 @@ impl Daemon {
                 syncer,
                 api,
                 span,
+                sync_event_writer: Some(sync_event_writer),
             })
         }
         .instrument(info_span!(parent: span_id, "load"))
@@ -219,6 +228,15 @@ impl Daemon {
                 .serve()
                 .instrument(info_span!("sync-server")),
         );
+        
+        // Spawn sync event writer if present
+        if let Some(writer) = self.sync_event_writer.take() {
+            set.spawn(
+                writer.run()
+                    .instrument(info_span!("sync-event-writer")),
+            );
+        }
+        
         set.spawn(
             async move {
                 loop {

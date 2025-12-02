@@ -2,7 +2,7 @@ use std::{net::SocketAddr, path::PathBuf};
 
 use aranya_daemon_api::{crypto::PublicApiKey, CS};
 use axum::{
-    routing::{delete, get, post},
+    routing::{delete, get, post, put},
     Router,
 };
 use tower::ServiceBuilder;
@@ -41,6 +41,18 @@ impl RestServer {
             .route("/api/v1/sync/peers", post(handlers::add_sync_peer))
             .route("/api/v1/sync/now", post(handlers::sync_now))
             .route("/api/v1/sync/peers", delete(handlers::remove_sync_peer))
+            .route(
+                "/api/v1/teams/{team_id}/sync/peers", 
+                get(handlers::query_sync_peers)
+            )
+            .route(
+                "/api/v1/teams/{team_id}/sync/peers/{addr}/config",
+                get(handlers::query_sync_peer_config),
+            )
+            .route(
+                "/api/v1/sync/peers/config",
+                put(handlers::update_sync_peer_config),
+            )
             // Team management
             .route("/api/v1/teams", post(handlers::create_team))
             .route("/api/v1/teams/{team_id}", delete(handlers::close_team))
@@ -73,6 +85,18 @@ impl RestServer {
             .route(
                 "/api/v1/teams/{team_id}/roles/revoke",
                 post(handlers::revoke_role),
+            )
+            .route(
+                "/api/v1/teams/{team_id}/roles/bulk-assign",
+                post(handlers::bulk_assign_role),
+            )
+            .route(
+                "/api/v1/teams/{team_id}/roles",
+                get(handlers::query_all_device_roles),
+            )
+            .route(
+                "/api/v1/teams/{team_id}/roles/{role}/devices",
+                get(handlers::query_devices_by_role),
             )
             // Network identifier management
             .route(

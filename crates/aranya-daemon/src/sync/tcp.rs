@@ -82,6 +82,17 @@ impl SyncState for State {
         if let Some(cmds) = sync_requester.receive(&data)? {
             debug!(num = cmds.len(), "received commands");
             if !cmds.is_empty() {
+                // Send sync event ONLY when we receive actual commands
+                if let Some(tx) = &syncer.sync_event_tx {
+                    let event = crate::sync::task::SyncEvent {
+                        peer_addr: addr.into(),
+                        graph_id: id,
+                        commands_count: cmds.len(),
+                    };
+                    let _ = tx.send(event);
+                    debug!("Sent sync event: {} commands from {}", cmds.len(), addr);
+                }
+                
                 let mut client = syncer.client.lock().await;
                 let mut trx = client.transaction(id);
                 // TODO: save PeerCache somewhere.

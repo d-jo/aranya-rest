@@ -17,7 +17,7 @@ use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 use tokio_util::time::{delay_queue::Key, DelayQueue};
-use tracing::{error, instrument, trace};
+use tracing::{error, info, instrument, trace};
 
 use crate::{
     daemon::{Client, EF},
@@ -134,9 +134,61 @@ impl SyncPeers {
         }
         Ok(())
     }
+
+    /// Query all sync peers for a specific graph/team.
+    pub(crate) fn query_sync_peers(&self, graph_id: GraphId) -> Vec<(Addr, SyncPeerConfig)> {
+        self.cfgs
+            .iter()
+            .filter_map(|((addr, gid), cfg)| {
+                if *gid == graph_id {
+                    Some((*addr, cfg.clone()))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Query sync peer configuration for a specific peer and graph/team.
+    pub(crate) fn query_sync_peer_config(
+        &self,
+        addr: Addr,
+        graph_id: GraphId,
+    ) -> Option<SyncPeerConfig> {
+        self.cfgs.get(&(addr, graph_id)).cloned()
+    }
+
+    /// Update sync peer configuration.
+    pub(crate) async fn update_sync_peer_config(
+        &mut self,
+        addr: Addr,
+        graph_id: GraphId,
+        config: SyncPeerConfig,
+    ) -> Result<()> {
+        // Check if the peer exists
+        if !self.cfgs.contains_key(&(addr, graph_id)) {
+            return Err(anyhow::anyhow!("Sync peer not found"));
+        }
+
+        // Remove the old peer and add with new config
+        self.remove_peer(addr, graph_id).await?;
+        self.add_peer(addr, graph_id, config).await?;
+
+        Ok(())
+    }
 }
 
 type EffectSender = mpsc::Sender<(GraphId, Vec<EF>)>;
+
+/// Real sync event that occurred
+#[derive(Debug, Clone)]
+pub struct SyncEvent {
+    pub peer_addr: Addr,
+    pub graph_id: GraphId,
+    pub commands_count: usize,
+}
+
+pub type SyncEventSender = mpsc::UnboundedSender<SyncEvent>;
 
 /// Syncs with each peer after the specified interval.
 /// Uses a [`DelayQueue`] to obtain the next peer to sync with.
@@ -156,6 +208,8 @@ pub struct Syncer<ST> {
     invalid: InvalidGraphs,
     /// Additional state used by the syncer
     _state: ST,
+    /// Channel to send real sync events (when commands are received)
+    pub sync_event_tx: Option<SyncEventSender>,
 }
 
 struct PeerInfo {
@@ -198,10 +252,12 @@ impl<ST> Syncer<ST> {
                 send_effects,
                 invalid,
                 _state,
+                sync_event_tx: None,
             },
             peers,
         )
     }
+
 
     /// Add a peer to the delay queue, overwriting an existing one.
     fn add_peer(&mut self, peer: SyncPeer, cfg: &SyncPeerConfig) {
@@ -259,6 +315,7 @@ impl<ST: SyncState> Syncer<ST> {
     /// Sync with a peer.
     #[instrument(skip_all, fields(peer = ?peer))]
     pub(crate) async fn sync(&mut self, peer: &SyncPeer) -> Result<()> {
+        info!(peer_addr = %peer.addr, graph_id = %peer.graph_id, "sync_started");
         trace!("syncing with peer");
         let effects: Vec<EF> = {
             let mut sink = VecSink::new();
@@ -289,7 +346,11 @@ impl<ST: SyncState> Syncer<ST> {
             .send((peer.graph_id, effects))
             .await
             .context("unable to send effects")?;
+        
+        // Log sync completion with peer address for tracking
+        info!(peer_addr = %peer.addr, graph_id = %peer.graph_id, effects_count = n, "sync_completed");
         trace!(?n, "completed sync");
+        
         Ok(())
     }
 }

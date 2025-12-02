@@ -605,6 +605,15 @@ pub trait DaemonApi {
     /// Removes the peer from automatic syncing.
     async fn remove_sync_peer(addr: Addr, team: TeamId) -> Result<()>;
 
+    /// Query all sync peers for a team.
+    async fn query_sync_peers(team: TeamId) -> Result<Vec<(Addr, SyncPeerConfig)>>;
+
+    /// Query sync peer configuration for a specific peer.
+    async fn query_sync_peer_config(addr: Addr, team: TeamId) -> Result<Option<SyncPeerConfig>>;
+
+    /// Update sync peer configuration.
+    async fn update_sync_peer_config(addr: Addr, team: TeamId, config: SyncPeerConfig) -> Result<()>;
+
     /// add a team to the local device store that was created by someone else. Not an aranya action/command.
     async fn add_team(team: TeamId, cfg: TeamConfig) -> Result<()>;
 

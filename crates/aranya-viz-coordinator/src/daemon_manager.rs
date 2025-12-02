@@ -22,7 +22,7 @@ pub struct DaemonManager {
     state: AppState,
     daemon_handles: Arc<RwLock<HashMap<Uuid, DaemonHandle>>>,
     rest_handles: Arc<RwLock<HashMap<Uuid, tokio::process::Child>>>,
-    temp_dirs: Arc<RwLock<HashMap<Uuid, tempfile::TempDir>>>,
+    pub temp_dirs: Arc<RwLock<HashMap<Uuid, tempfile::TempDir>>>,
 }
 
 impl DaemonManager {
@@ -299,8 +299,8 @@ impl DaemonManager {
     }
 
     #[instrument(skip(self))]
-    pub async fn configure_sync_peer(&self, from_node_id: Uuid, to_node_id: Uuid, team_id: &str) -> Result<()> {
-        info!("Configuring sync peer from {} to {}", from_node_id, to_node_id);
+    pub async fn configure_sync_peer(&self, from_node_id: Uuid, to_node_id: Uuid, team_id: &str, interval_secs: u32, sync_now: bool) -> Result<()> {
+        info!("Configuring sync peer from {} to {} with interval {}s", from_node_id, to_node_id, interval_secs);
         
         // Get the nodes' info
         let (from_node, to_node) = {
@@ -316,13 +316,13 @@ impl DaemonManager {
         let client = reqwest::Client::new();
         let url = format!("http://127.0.0.1:{}{}", from_node.rest_port, SYNC_PEER_ENDPOINT);
         
-        // Create sync peer request using the actual team ID
+        // Create sync peer request using the actual team ID and provided config
         let sync_peer_request = serde_json::json!({
             "addr": format!("127.0.0.1:{}", to_node.daemon_port),
             "team_id": team_id,
             "config": {
-                "interval_secs": 1,
-                "sync_now": true
+                "interval_secs": interval_secs,
+                "sync_now": sync_now
             }
         });
 
@@ -466,6 +466,151 @@ impl DaemonManager {
         }
 
         Ok(result)
+    }
+
+    #[instrument(skip(self))]
+    pub async fn assign_role(&self, acting_node_id: Uuid, team_id: &str, target_node_id: Uuid, role: &str) -> Result<()> {
+        info!("Assigning role '{}' to node {} in team {} via acting node {}", role, target_node_id, team_id, acting_node_id);
+        
+        // Get the acting node's info
+        let acting_node = {
+            let state = self.state.read().await;
+            state.nodes.get(&acting_node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Acting node {} not found", acting_node_id))?
+        };
+
+        // Get the target node's device ID from its REST API
+        let target_device_id = self.get_device_id(target_node_id).await?;
+
+        // Make REST API call to assign role via the acting node
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/api/v1/teams/{}/roles/assign", acting_node.rest_port, team_id);
+        
+        let assign_request = serde_json::json!({
+            "device_id": target_device_id,
+            "role": role
+        });
+
+        let response = client
+            .post(&url)
+            .json(&assign_request)
+            .send()
+            .await
+            .context("Failed to send assign role request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to assign role: {}", error_text);
+        }
+
+        info!("Successfully assigned role '{}' to node {} in team {}", role, target_node_id, team_id);
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    async fn get_device_id(&self, node_id: Uuid) -> Result<String> {
+        let node = {
+            let state = self.state.read().await;
+            state.nodes.get(&node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Node {} not found", node_id))?
+        };
+
+        // Make REST API call to get device ID
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/api/v1/device-id", node.rest_port);
+
+        let response = client
+            .get(&url)
+            .send()
+            .await
+            .context("Failed to get device ID")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to get device ID: {}", error_text);
+        }
+
+        let response_json: serde_json::Value = response.json().await
+            .context("Failed to parse device ID response")?;
+        
+        let device_id = response_json["device_id"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("No device_id in response"))?
+            .to_string();
+
+        Ok(device_id)
+    }
+
+    #[instrument(skip(self))]
+    pub async fn remove_device_from_team(&self, acting_node_id: Uuid, team_id: &str, target_node_id: Uuid) -> Result<()> {
+        info!("Removing device {} from team {} via acting node {}", target_node_id, team_id, acting_node_id);
+        
+        // Get the acting node's info
+        let acting_node = {
+            let state = self.state.read().await;
+            state.nodes.get(&acting_node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Acting node {} not found", acting_node_id))?
+        };
+
+        // Get the target device ID from the node
+        let target_device_id = self.get_device_id(target_node_id).await?;
+
+        // Make REST API call to remove device from team via the acting node
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/api/v1/teams/{}/devices/{}", acting_node.rest_port, team_id, target_device_id);
+
+        let response = client
+            .delete(&url)
+            .send()
+            .await
+            .context("Failed to send remove device request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to remove device from team: {}", error_text);
+        }
+
+        info!("Successfully removed device {} from team {} via acting node {}", target_node_id, team_id, acting_node_id);
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    pub async fn revoke_role(&self, acting_node_id: Uuid, team_id: &str, target_node_id: Uuid, role: &str) -> Result<()> {
+        info!("Revoking role '{}' from node {} in team {} via acting node {}", role, target_node_id, team_id, acting_node_id);
+        
+        // Get the acting node's info
+        let acting_node = {
+            let state = self.state.read().await;
+            state.nodes.get(&acting_node_id).cloned()
+                .ok_or_else(|| anyhow::anyhow!("Acting node {} not found", acting_node_id))?
+        };
+
+        // Get the target node's device ID from its REST API
+        let target_device_id = self.get_device_id(target_node_id).await?;
+
+        // Make REST API call to revoke role via the acting node
+        let client = reqwest::Client::new();
+        let url = format!("http://127.0.0.1:{}/api/v1/teams/{}/roles/revoke", acting_node.rest_port, team_id);
+        
+        let revoke_request = serde_json::json!({
+            "device_id": target_device_id,
+            "role": role
+        });
+
+        let response = client
+            .post(&url)
+            .json(&revoke_request)
+            .send()
+            .await
+            .context("Failed to send revoke role request")?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+            anyhow::bail!("Failed to revoke role: {}", error_text);
+        }
+
+        info!("Successfully revoked role '{}' from node {} in team {} (demoted to Member)", role, target_node_id, team_id);
+        Ok(())
     }
 }
 

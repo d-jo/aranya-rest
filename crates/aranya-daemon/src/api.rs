@@ -351,6 +351,58 @@ impl DaemonApi for Api {
     }
 
     #[instrument(skip(self))]
+    async fn query_sync_peers(
+        self,
+        _: context::Context,
+        team: api::TeamId,
+    ) -> api::Result<Vec<(Addr, api::SyncPeerConfig)>> {
+        self.check_team_valid(team).await?;
+
+        let peers = self
+            .peers
+            .lock()
+            .await
+            .query_sync_peers(team.into_id().into());
+        Ok(peers)
+    }
+
+    #[instrument(skip(self))]
+    async fn query_sync_peer_config(
+        self,
+        _: context::Context,
+        peer: Addr,
+        team: api::TeamId,
+    ) -> api::Result<Option<api::SyncPeerConfig>> {
+        self.check_team_valid(team).await?;
+
+        let config = self
+            .peers
+            .lock()
+            .await
+            .query_sync_peer_config(peer, team.into_id().into());
+        Ok(config)
+    }
+
+    #[instrument(skip(self))]
+    async fn update_sync_peer_config(
+        self,
+        _: context::Context,
+        peer: Addr,
+        team: api::TeamId,
+        config: api::SyncPeerConfig,
+    ) -> api::Result<()> {
+        self.check_team_valid(team).await?;
+
+        self.peers
+            .lock()
+            .await
+            .update_sync_peer_config(peer, team.into_id().into(), config)
+            .await
+            .context("unable to update sync peer config")?;
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
     async fn add_team(
         self,
         _: context::Context,

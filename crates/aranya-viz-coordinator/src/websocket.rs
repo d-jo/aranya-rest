@@ -174,7 +174,7 @@ async fn handle_message(
             let _ = tx.send(WsMessage::NodeMoved { node_id, position });
         }
 
-        WsMessage::AddSyncConnection { from, to, team_id } => {
+        WsMessage::AddSyncConnection { from, to, team_id, interval_secs, sync_now } => {
             let connection = SyncConnection {
                 from,
                 to,
@@ -195,7 +195,7 @@ async fn handle_message(
                 let state = state.clone();
                 let tx = tx.clone();
                 async move {
-                    match daemon_manager.configure_sync_peer(from, to, &team_id).await {
+                    match daemon_manager.configure_sync_peer(from, to, &team_id, interval_secs, sync_now).await {
                         Ok(_) => {
                             // Update connection status
                             {
@@ -431,6 +431,111 @@ async fn handle_message(
                 Err(e) => {
                     // Log but don't send error to avoid spam - polling failures are expected
                     tracing::debug!("Failed to poll messages for node {}: {}", node_id, e);
+                }
+            }
+        }
+
+        WsMessage::RemoveDeviceFromTeam { node_id, team_id, target_node_id } => {
+            match daemon_manager.remove_device_from_team(node_id, &team_id, target_node_id).await {
+                Ok(_) => {
+                    // Update the target node's teams in state
+                    {
+                        let mut state_guard = state.write().await;
+                        if let Some(target_node) = state_guard.nodes.get_mut(&target_node_id) {
+                            // Remove the team from the node's teams array
+                            target_node.teams.retain(|t| t.id != team_id);
+                        }
+                        
+                        // Remove from global teams structure
+                        if let Some(team) = state_guard.teams.get_mut(&team_id) {
+                            team.members.retain(|m| m.node_id != target_node_id);
+                        }
+                    }
+                    
+                    let _ = tx.send(WsMessage::DeviceRemovedFromTeam { 
+                        node_id: target_node_id, 
+                        team_id: team_id.clone() 
+                    });
+                }
+                Err(e) => {
+                    error!("Failed to remove device {} from team via node {}: {}", target_node_id, node_id, e);
+                    let _ = tx.send(WsMessage::Error { 
+                        message: format!("Failed to remove device from team: {}", e) 
+                    });
+                }
+            }
+        }
+
+        WsMessage::RevokeRole { node_id, team_id, target_node_id, role } => {
+            match daemon_manager.revoke_role(node_id, &team_id, target_node_id, &role).await {
+                Ok(_) => {
+                    // Update the target node's role in state (demote to Member)
+                    {
+                        let mut state_guard = state.write().await;
+                        if let Some(target_node) = state_guard.nodes.get_mut(&target_node_id) {
+                            // Update the role in the node's teams array - revocation always demotes to Member
+                            if let Some(team_info) = target_node.teams.iter_mut().find(|t| t.id == team_id) {
+                                team_info.role = Some("Member".to_string());
+                            }
+                        }
+                        
+                        // Update in global teams structure
+                        if let Some(team) = state_guard.teams.get_mut(&team_id) {
+                            if let Some(member) = team.members.iter_mut().find(|m| m.node_id == target_node_id) {
+                                member.role = "Member".to_string(); // Revocation always demotes to Member
+                            }
+                        }
+                    }
+                    
+                    let _ = tx.send(WsMessage::RoleRevoked { 
+                        node_id, 
+                        team_id: team_id.clone(), 
+                        target_node_id,
+                        role: "Member".to_string() // Always demotes to Member according to policy
+                    });
+                }
+                Err(e) => {
+                    error!("Failed to revoke role for node {}: {}", target_node_id, e);
+                    let _ = tx.send(WsMessage::Error { 
+                        message: format!("Failed to revoke role: {}", e) 
+                    });
+                }
+            }
+        }
+
+        WsMessage::AssignRole { node_id, team_id, target_node_id, role } => {
+            match daemon_manager.assign_role(node_id, &team_id, target_node_id, &role).await {
+                Ok(_) => {
+                    // Update the target node's role in state
+                    {
+                        let mut state_guard = state.write().await;
+                        if let Some(target_node) = state_guard.nodes.get_mut(&target_node_id) {
+                            // Update the role in the node's teams array
+                            if let Some(team_info) = target_node.teams.iter_mut().find(|t| t.id == team_id) {
+                                team_info.role = Some(role.clone());
+                            }
+                        }
+                        
+                        // Update in global teams structure
+                        if let Some(team) = state_guard.teams.get_mut(&team_id) {
+                            if let Some(member) = team.members.iter_mut().find(|m| m.node_id == target_node_id) {
+                                member.role = role.clone();
+                            }
+                        }
+                    }
+                    
+                    let _ = tx.send(WsMessage::RoleAssigned { 
+                        node_id, 
+                        team_id: team_id.clone(), 
+                        target_node_id,
+                        role: role.clone() 
+                    });
+                }
+                Err(e) => {
+                    error!("Failed to assign role for node {}: {}", target_node_id, e);
+                    let _ = tx.send(WsMessage::Error { 
+                        message: format!("Failed to assign role: {}", e) 
+                    });
                 }
             }
         }

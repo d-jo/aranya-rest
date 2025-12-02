@@ -17,6 +17,7 @@ use tracing::info;
 use crate::{
     daemon_manager::DaemonManager,
     websocket::websocket_handler,
+    sync_monitor::SyncMonitor,
     AppState, AppStateInner, WsMessage,
 };
 
@@ -40,6 +41,10 @@ impl Coordinator {
         
         // Create broadcast channel for WebSocket messages
         let (tx, _rx) = broadcast::channel::<WsMessage>(1000);
+        
+        // Start sync monitor for animations
+        let sync_monitor = SyncMonitor::new(state.clone(), tx.clone(), daemon_manager.clone());
+        tokio::spawn(sync_monitor.start());
 
         // Build router
         let mut router = Router::new()
@@ -1149,6 +1154,241 @@ async fn serve_basic_html() -> Html<&'static str> {
                 max-height: 300px;
             }
         }
+        
+        /* Access Control and Sync Configuration Styles */
+        .team-overview {
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin-top: 1rem;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .roles-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .role-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+        }
+        
+        .role-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: white;
+        }
+        
+        .role-badge.owner {
+            background: #8b5cf6;
+        }
+        
+        .role-badge.admin {
+            background: #3b82f6;
+        }
+        
+        .role-badge.operator {
+            background: #10b981;
+        }
+        
+        .role-badge.member {
+            background: #6b7280;
+        }
+        
+        .team-overview {
+            margin-top: 1rem;
+        }
+        
+        .roles-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .role-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 0.5rem;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+        }
+        
+        .role-item span:first-child {
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        
+        .sync-peers-list {
+            background: var(--background-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: 1rem;
+            margin-top: 1rem;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .sync-peer-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            margin-bottom: 0.5rem;
+        }
+        
+        .sync-peer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .sync-peer-info {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+        
+        .sync-peer-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        
+        .sync-peer-actions .btn {
+            padding: 0.375rem 0.75rem;
+            font-size: 0.75rem;
+        }
+        
+        .btn-danger {
+            background: var(--error-color);
+            color: white;
+            border-color: var(--error-color);
+        }
+        
+        .btn-danger:hover {
+            background: #dc2626;
+            border-color: #dc2626;
+        }
+        
+        .btn-full {
+            width: 100%;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        
+        .status-indicator.active {
+            background: var(--success-color);
+        }
+        
+        .status-indicator.inactive {
+            background: var(--error-color);
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        
+        .input-group input {
+            flex: 1;
+        }
+        
+        .input-group .btn {
+            flex-shrink: 0;
+        }
+        
+        /* Tool Arguments Ribbon */
+        .tool-args-ribbon {
+            background: var(--surface-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.5rem 1rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            min-height: 40px;
+        }
+        
+        .ribbon-section {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .ribbon-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0 0.5rem;
+            border-right: 1px solid var(--border-color);
+        }
+        
+        .ribbon-group:last-child {
+            border-right: none;
+        }
+        
+        .ribbon-group label {
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+        
+        .ribbon-group input[type="text"],
+        .ribbon-group input[type="number"],
+        .ribbon-group select {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            height: 28px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            background: var(--surface-color);
+        }
+        
+        .ribbon-group input[type="checkbox"] {
+            margin-right: 0.25rem;
+        }
+        
+        .ribbon-group .checkbox-label {
+            display: flex;
+            align-items: center;
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+        
+        .ribbon-group span {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
     </style>
 </head>
 <body>
@@ -1160,20 +1400,20 @@ async fn serve_basic_html() -> Html<&'static str> {
                 </div>
                 <h1>Aranya Visualization</h1>
             </div>
-            <p>Click to place nodes. Drag to move them. Pan by dragging empty space. Zoom with mouse wheel. Right-click for options.</p>
+            <p>Click to place devices. Drag to move them. Pan by dragging empty space. Zoom with mouse wheel. Right-click for options.</p>
         </div>
         
         <div class="main-content">
             <div class="panel" id="leftPanel" style="width: 350px; border-right: 1px solid var(--border-color);">
                 <div class="drawer" data-drawer-id="appearance">
-                    <div class="drawer-header expanded">
+                    <div class="drawer-header">
                         <div class="drawer-title">
                             <span class="drawer-icon">🎨</span>
                             <span>Appearance</span>
                         </div>
                         <span class="drawer-arrow">▶</span>
                     </div>
-                    <div class="drawer-content expanded">
+                    <div class="drawer-content">
                         <div class="drawer-inner">
                             <div class="texture-selector">
                                 <h5>Background Themes</h5>
@@ -1205,12 +1445,12 @@ async fn serve_basic_html() -> Html<&'static str> {
                                     </div>
                                     
                                     <div class="node-icons-header">
-                                        <h5>🎯 Node Icons</h5>
+                                        <h5>🎯 Device Icons</h5>
                                         <button id="toggleNodeIcons" class="toggle-btn">▼</button>
                                     </div>
                                     <div id="nodeIconSection" class="node-icon-section">
                                         <div class="form-group">
-                                            <label>Default Icon for New Nodes:</label>
+                                            <label>Default Icon for New Devices:</label>
                                             <input type="text" id="defaultNodeIcon" value="🔵" placeholder="🔵" class="icon-input">
                                         </div>
                                         <div id="individualNodeIcons" class="individual-icons"></div>
@@ -1245,26 +1485,26 @@ async fn serve_basic_html() -> Html<&'static str> {
                 </div>
                 
                 <div class="drawer" data-drawer-id="messaging">
-                    <div class="drawer-header expanded">
+                    <div class="drawer-header">
                         <div class="drawer-title">
                             <span class="drawer-icon">💬</span>
                             <span>Messaging</span>
                         </div>
                         <span class="drawer-arrow">▶</span>
                     </div>
-                    <div class="drawer-content expanded">
+                    <div class="drawer-content">
                         <div class="drawer-inner">
                             <h5>📤 Send Message</h5>
-                            <div class="form-group">
-                                <label for="messageSenderSelector">Sender Node:</label>
-                                <select id="messageSenderSelector">
-                                    <option value="">-- Select Sender Node --</option>
-                                </select>
-                            </div>
                             <div class="form-group">
                                 <label for="messageTeamSelector">Team:</label>
                                 <select id="messageTeamSelector">
                                     <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="messageSenderSelector">Sender Device:</label>
+                                <select id="messageSenderSelector">
+                                    <option value="">-- Select Sender Device --</option>
                                 </select>
                             </div>
                             <div class="form-group">
@@ -1282,6 +1522,145 @@ async fn serve_basic_html() -> Html<&'static str> {
                         </div>
                     </div>
                 </div>
+                
+                <div class="drawer" data-drawer-id="access-control">
+                    <div class="drawer-header">
+                        <div class="drawer-title">
+                            <span class="drawer-icon">🔐</span>
+                            <span>Access Control</span>
+                        </div>
+                        <span class="drawer-arrow">▶</span>
+                    </div>
+                    <div class="drawer-content">
+                        <div class="drawer-inner">
+                            <h5>🔄 Role Management</h5>
+                            <div class="form-group">
+                                <label for="roleTeamSelector">Select Team:</label>
+                                <select id="roleTeamSelector">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="roleActingNodeSelector">Acting Device (who assigns):</label>
+                                <select id="roleActingNodeSelector">
+                                    <option value="">-- Select Acting Device --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="roleTargetNodeSelector">Target Device (who gets role):</label>
+                                <select id="roleTargetNodeSelector">
+                                    <option value="">-- Select Target Device --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="newRoleSelector">Assign Role:</label>
+                                <select id="newRoleSelector">
+                                    <option value="">-- Select Role --</option>
+                                    <option value="Owner">👑 Owner</option>
+                                    <option value="Admin">👤 Admin</option>
+                                    <option value="Operator">⚡ Operator</option>
+                                    <option value="Member">👥 Member</option>
+                                </select>
+                            </div>
+                            <div class="btn-grid">
+                                <button onclick="assignRoleFromUI()" class="btn btn-primary" id="assignRoleBtn" disabled>
+                                    Assign Role
+                                </button>
+                                <button onclick="revokeRoleFromUI()" class="btn btn-warning" id="revokeRoleBtn" disabled>
+                                    Revoke Role
+                                </button>
+                            </div>
+                            
+                            <h5 style="margin-top: 1.5rem;">❌ Device Management</h5>
+                            <div class="form-group">
+                                <label for="deviceRemovalTeamSelector">From Team:</label>
+                                <select id="deviceRemovalTeamSelector">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="deviceRemovalActingNodeSelector">Acting Device (who performs removal):</label>
+                                <select id="deviceRemovalActingNodeSelector">
+                                    <option value="">-- Select Acting Device --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="deviceRemovalNodeSelector">Target Device (to be removed):</label>
+                                <select id="deviceRemovalNodeSelector">
+                                    <option value="">-- Select Device --</option>
+                                </select>
+                            </div>
+                            <button onclick="removeDeviceFromTeamUI()" class="btn btn-danger btn-full" id="removeDeviceBtn" disabled>
+                                🗑️ Remove Device from Team
+                            </button>
+                            
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="drawer" data-drawer-id="sync-config">
+                    <div class="drawer-header">
+                        <div class="drawer-title">
+                            <span class="drawer-icon">🔄</span>
+                            <span>Sync Configuration</span>
+                        </div>
+                        <span class="drawer-arrow">▶</span>
+                    </div>
+                    <div class="drawer-content">
+                        <div class="drawer-inner">
+                            <h5>➕ Add Sync Connection</h5>
+                            <div class="form-group">
+                                <label for="syncTeamSelector">Team:</label>
+                                <select id="syncTeamSelector">
+                                    <option value="">-- Select Team --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="syncFromNodeSelector">From Device:</label>
+                                <select id="syncFromNodeSelector">
+                                    <option value="">-- Select Source Device --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="syncToNodeSelector">To Device:</label>
+                                <select id="syncToNodeSelector">
+                                    <option value="">-- Select Target Device --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="syncInterval">Sync Interval (seconds):</label>
+                                <input type="number" id="syncInterval" min="1" value="5" placeholder="5">
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="syncNowFlag" checked>
+                                    Sync immediately after adding
+                                </label>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="advancedMode" onchange="toggleAdvancedMode()">
+                                    Advanced mode (custom URL)
+                                </label>
+                            </div>
+                            
+                            <div id="advancedSyncOptions" style="display: none;">
+                                <div class="form-group">
+                                    <label for="customSyncUrl">Custom Peer URL:</label>
+                                    <input type="text" id="customSyncUrl" placeholder="http://192.168.1.100:8080">
+                                    <small style="display: block; color: var(--text-secondary); margin-top: 0.25rem;">
+                                        Use this to sync with devices outside the visualization
+                                    </small>
+                                </div>
+                            </div>
+                            
+                            <button onclick="addSyncConnectionFromUI()" class="btn btn-primary btn-full" id="addSyncBtn" disabled>
+                                ➕ Add Sync Connection
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
             
             <div class="resizer" id="leftResizer"></div>
@@ -1290,9 +1669,9 @@ async fn serve_basic_html() -> Html<&'static str> {
                 <div class="canvas-header">
                     <div class="controls">
                         <button onclick="selectTool('select')" id="selectTool" class="btn active">✋ Select/Move</button>
-                        <button onclick="selectTool('place')" id="placeTool" class="btn">➕ Place Node</button>
+                        <button onclick="selectTool('place')" id="placeTool" class="btn">➕ Place Device</button>
                         <button onclick="selectTool('connect')" id="connectTool" class="btn">🔗 Connect</button>
-                        <input type="text" id="nodeNameInput" placeholder="Node name..." value="" style="max-width: 150px;">
+                        <input type="text" id="nodeNameInput" placeholder="Device name..." value="" style="max-width: 150px;">
                     </div>
                     <div class="controls">
                         <button onclick="clearAll()" class="btn">🗑️ Clear All</button>
@@ -1301,6 +1680,67 @@ async fn serve_basic_html() -> Html<&'static str> {
                         <span style="color: var(--text-secondary); font-size: 0.875rem;">Zoom: <span id="zoomLevel">100%</span></span>
                     </div>
                 </div>
+                
+                <!-- Tool Arguments Ribbon -->
+                <div id="toolArgsRibbon" class="tool-args-ribbon" style="display: none;">
+                    <!-- Create Node Arguments -->
+                    <div id="createNodeArgs" class="ribbon-section" style="display: none;">
+                        <div class="ribbon-group">
+                            <label>Join Team:</label>
+                            <select id="createNodeTeam" style="width: 150px;">
+                                <option value="">-- None --</option>
+                            </select>
+                        </div>
+                        <div class="ribbon-group">
+                            <label>Name:</label>
+                            <input type="text" id="createNodeName" placeholder="Auto" style="width: 120px;">
+                        </div>
+                        <div class="ribbon-group">
+                            <label>Icon:</label>
+                            <input type="text" id="createNodeIcon" placeholder="🔵" maxlength="2" style="width: 40px;">
+                        </div>
+                        <div class="ribbon-group" style="border: none; padding-left: 1rem;">
+                            <span style="font-style: italic; color: var(--text-secondary);">💡 New device will auto-start and join selected team</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Connect Nodes Arguments -->
+                    <div id="connectNodesArgs" class="ribbon-section" style="display: none;">
+                        <div class="ribbon-group">
+                            <label>Team:</label>
+                            <select id="connectTeam" style="width: 150px;">
+                                <option value="">-- Select --</option>
+                            </select>
+                        </div>
+                        <div class="ribbon-group">
+                            <label>Interval:</label>
+                            <input type="number" id="connectInterval" min="1" max="3600" value="5" style="width: 60px;">
+                            <span>s</span>
+                        </div>
+                        <div class="ribbon-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="connectBidirectional" checked>
+                                Bidirectional
+                            </label>
+                        </div>
+                        <div class="ribbon-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="connectRandomInterval">
+                                Random (1-10s)
+                            </label>
+                        </div>
+                        <div class="ribbon-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="connectSyncNow" checked>
+                                Sync now
+                            </label>
+                        </div>
+                        <div class="ribbon-group" style="border: none; padding-left: 1rem;">
+                            <span id="connectHelpText" style="font-style: italic; color: var(--text-secondary);">💡 Hold Shift+Drag to connect multiple devices</span>
+                        </div>
+                    </div>
+                </div>
+                
                 <div class="canvas-viewport">
                     <canvas id="canvas"></canvas>
                 </div>
@@ -1326,22 +1766,22 @@ async fn serve_basic_html() -> Html<&'static str> {
                             </div>
                             <div class="btn-grid">
                                 <select id="nodeSelector" class="form-group">
-                                    <option value="">-- Select Node --</option>
+                                    <option value="">-- Select Device --</option>
                                 </select>
                                 <button onclick="createTeamFromUI()" class="btn btn-primary">Create Team</button>
                             </div>
                             
                             <h5 style="margin-top: 1.5rem;">Join Team</h5>
-                            <div class="btn-grid">
-                                <select id="joinNodeSelector" class="form-group">
-                                    <option value="">-- Select Node --</option>
-                                </select>
-                                <button onclick="joinTeamFromUI()" class="btn btn-primary">Join Team</button>
-                            </div>
                             <div class="form-group">
                                 <select id="availableTeamsSelector">
                                     <option value="">-- Select Team to Join --</option>
                                 </select>
+                            </div>
+                            <div class="btn-grid">
+                                <select id="joinNodeSelector" class="form-group">
+                                    <option value="">-- Select Device --</option>
+                                </select>
+                                <button onclick="joinTeamFromUI()" class="btn btn-primary">Join Team</button>
                             </div>
                         </div>
                     </div>
@@ -1367,7 +1807,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                             
                             <div class="btn-grid">
                                 <button onclick="addAllNodesToSelectedTeam()" class="btn btn-success btn-full">
-                                    Add All Nodes to Team
+                                    Add All Devices to Team
                                 </button>
                                 <button onclick="autoSyncTeamMembers()" class="btn btn-primary">
                                     Auto-Sync All
@@ -1386,6 +1826,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                                 • <span class="role-color" style="color: #FF9800;">Orange</span>: Admin<br>
                                 • <span class="role-color" style="color: #9C27B0;">Purple</span>: Operator<br>
                                 • <span class="role-color" style="color: #2196F3;">Blue</span>: Member<br>
+                                • <span class="role-color" style="color: #808080;">Gray</span>: Loading...<br>
                                 <br>
                                 <strong>Sync Types:</strong><br>
                                 • <span style="color: var(--primary-color);">Auto-Sync</span>: Full mesh<br>
@@ -1419,12 +1860,12 @@ async fn serve_basic_html() -> Html<&'static str> {
     </div>
 
     <div class="context-menu" id="contextMenu">
-        <div class="context-menu-item" onclick="deleteSelectedNode()">Delete Node</div>
+        <div class="context-menu-item" onclick="deleteSelectedNode()">Delete Device</div>
         <div class="context-menu-item" onclick="createTeamForNode()">Create Team</div>
         <div class="context-menu-item" onclick="joinTeamDialog()">Join Team</div>
         <div class="context-menu-item" onclick="removeSyncPeers()">Remove Sync Peers</div>
-        <div class="context-menu-item" onclick="sendMessageToNode()">Send Message</div>
-        <div class="context-menu-item" onclick="viewNodeInfo()">View Info</div>
+        <div class="context-menu-item" onclick="sendMessageToDevice()">Send Message</div>
+        <div class="context-menu-item" onclick="viewDeviceInfo()">View Info</div>
     </div>
 
     <script>
@@ -1619,7 +2060,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             container.innerHTML = '';
             
             if (nodes.size === 0) {
-                container.innerHTML = '<div style="color: var(--text-secondary); font-style: italic; font-size: 0.875rem;">No nodes available. Create some nodes first.</div>';
+                container.innerHTML = '<div style="color: var(--text-secondary); font-style: italic; font-size: 0.875rem;">No devices available. Create some devices first.</div>';
                 return;
             }
             
@@ -1633,7 +2074,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                 
                 const nodeLabel = document.createElement('span');
                 nodeLabel.className = 'node-id';
-                nodeLabel.textContent = `${node.name || 'Node'} (${nodeId.slice(0, 8)}...)`;
+                nodeLabel.textContent = `${node.name || 'Device'} (${nodeId.slice(0, 8)}...)`;
                 nodeLabel.title = `Node ID: ${nodeId}`;
                 
                 header.appendChild(nodeLabel);
@@ -1705,7 +2146,7 @@ async fn serve_basic_html() -> Html<&'static str> {
                 const uploadBtn = document.createElement('button');
                 uploadBtn.className = 'icon-upload-btn';
                 uploadBtn.textContent = '📁 Image';
-                uploadBtn.title = 'Upload image for this node';
+                uploadBtn.title = 'Upload image for this device';
                 uploadBtn.addEventListener('click', () => {
                     fileInput.click();
                 });
@@ -1790,11 +2231,11 @@ async fn serve_basic_html() -> Html<&'static str> {
             if (section.classList.contains('collapsed')) {
                 section.classList.remove('collapsed');
                 toggleBtn.textContent = '▼';
-                toggleBtn.title = 'Collapse node icons';
+                toggleBtn.title = 'Collapse device icons';
             } else {
                 section.classList.add('collapsed');
                 toggleBtn.textContent = '▶';
-                toggleBtn.title = 'Expand node icons';
+                toggleBtn.title = 'Expand device icons';
             }
         }
         
@@ -2307,6 +2748,13 @@ async fn serve_basic_html() -> Html<&'static str> {
                 if (savedState === 'expanded' || savedState === null) {
                     header.classList.add('expanded');
                     content.classList.add('expanded');
+                    
+                    // Update selectors for initially expanded drawers
+                    if (drawerId === 'access-control') {
+                        setTimeout(() => updateAccessControlSelectors(), 100);
+                    } else if (drawerId === 'sync-config') {
+                        setTimeout(() => updateSyncConfigSelectors(), 100);
+                    }
                 }
                 
                 header.addEventListener('click', () => {
@@ -2320,6 +2768,13 @@ async fn serve_basic_html() -> Html<&'static str> {
                         header.classList.add('expanded');
                         content.classList.add('expanded');
                         localStorage.setItem(`drawer-${drawerId}`, 'expanded');
+                        
+                        // Update selectors when access control or sync config drawers are opened
+                        if (drawerId === 'access-control') {
+                            updateAccessControlSelectors();
+                        } else if (drawerId === 'sync-config') {
+                            updateSyncConfigSelectors();
+                        }
                     }
                 });
             });
@@ -2331,6 +2786,71 @@ async fn serve_basic_html() -> Html<&'static str> {
         let teams = new Map();
         let canvas = null;
         let ctx = null;
+        
+        // Animation state for sync operations
+        let syncAnimations = new Map(); // Map of connection key to animation state
+        let animationFrame = null;
+        
+        class SyncAnimation {
+            constructor(from, to, teamId) {
+                this.from = from;
+                this.to = to;
+                this.teamId = teamId;
+                this.progress = 0;
+                this.duration = 2000; // 2 second animation
+                this.startTime = Date.now();
+                this.particles = [];
+                
+                // Initialize particles
+                for (let i = 0; i < 5; i++) {
+                    this.particles.push({
+                        offset: i * 0.2,
+                        size: 4 + Math.random() * 4
+                    });
+                }
+            }
+            
+            update() {
+                const elapsed = Date.now() - this.startTime;
+                this.progress = Math.min(elapsed / this.duration, 1);
+                return this.progress < 1;
+            }
+        }
+        
+        // Start a sync animation
+        function startSyncAnimation(from, to, teamId) {
+            const key = `${from}-${to}-${teamId}`;
+            syncAnimations.set(key, new SyncAnimation(from, to, teamId));
+            
+            // Start animation loop if not running
+            if (!animationFrame) {
+                animate();
+            }
+        }
+        
+        // Animation loop
+        function animate() {
+            let hasActiveAnimations = false;
+            
+            // Update all active animations
+            syncAnimations.forEach((animation, key) => {
+                if (!animation.update()) {
+                    syncAnimations.delete(key);
+                } else {
+                    hasActiveAnimations = true;
+                }
+            });
+            
+            // Redraw canvas with animations
+            draw();
+            
+            // Continue animation loop if needed
+            if (hasActiveAnimations) {
+                animationFrame = requestAnimationFrame(animate);
+            } else {
+                animationFrame = null;
+            }
+        }
         
         // Initialize canvas size
         function initializeCanvas() {
@@ -2347,14 +2867,28 @@ async fn serve_basic_html() -> Html<&'static str> {
             const viewport = document.querySelector('.canvas-viewport');
             const rect = viewport.getBoundingClientRect();
             
-            // Set canvas size to match viewport
-            canvas.width = rect.width;
-            canvas.height = rect.height;
+            // Handle high-DPI displays
+            const dpr = window.devicePixelRatio || 1;
+            
+            // Set display size (css pixels)
+            canvas.style.width = rect.width + 'px';
+            canvas.style.height = rect.height + 'px';
+            
+            // Set actual buffer size (scaled for device pixel ratio)
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            
+            // Scale drawing context to account for device pixel ratio
+            ctx.scale(dpr, dpr);
+            
+            // Store display dimensions for coordinate calculations
+            canvas.displayWidth = rect.width;
+            canvas.displayHeight = rect.height;
             
             // Center the viewport initially if this is first initialization
             if (viewportX === 0 && viewportY === 0) {
-                viewportX = (canvas.width - CANVAS_WIDTH * viewportScale) / 2;
-                viewportY = (canvas.height - CANVAS_HEIGHT * viewportScale) / 2;
+                viewportX = (rect.width - CANVAS_WIDTH * viewportScale) / 2;
+                viewportY = (rect.height - CANVAS_HEIGHT * viewportScale) / 2;
             }
             
             // Redraw after resize
@@ -2362,7 +2896,33 @@ async fn serve_basic_html() -> Html<&'static str> {
         }
         
         // Handle window resize
-        window.addEventListener('resize', initializeCanvas);
+        window.addEventListener('resize', () => {
+            console.log('Window resized, reinitializing canvas');
+            initializeCanvas();
+        });
+        
+        // Use ResizeObserver for more accurate canvas container size changes
+        if (window.ResizeObserver) {
+            const resizeObserver = new ResizeObserver(entries => {
+                for (let entry of entries) {
+                    if (entry.target.classList.contains('canvas-viewport')) {
+                        console.log('Canvas viewport resized via ResizeObserver');
+                        initializeCanvas();
+                    }
+                }
+            });
+            
+            // Start observing once the viewport is available
+            const checkAndObserve = () => {
+                const viewport = document.querySelector('.canvas-viewport');
+                if (viewport) {
+                    resizeObserver.observe(viewport);
+                } else {
+                    setTimeout(checkAndObserve, 100);
+                }
+            };
+            checkAndObserve();
+        }
         let dragNode = null;
         let showConnections = true;
         let contextMenuNode = null;
@@ -2370,6 +2930,13 @@ async fn serve_basic_html() -> Html<&'static str> {
         let connectStart = null;
         let mousePos = { x: 0, y: 0 };
         let selectedTeamId = null;
+        
+        // Multi-connect state variables
+        let isMultiConnecting = false;
+        let multiConnectOrigin = null;
+        let multiConnectTargets = []; // Array to preserve order of highlighted nodes
+        let multiConnectPath = [];
+        let shiftPressed = false;
         let recentMessages = [];
         let messageBubbles = new Map();
         let messagePollingInterval = null;
@@ -2391,10 +2958,14 @@ async fn serve_basic_html() -> Html<&'static str> {
             ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
             
             ws.onopen = function() {
-                document.getElementById('status').textContent = 'Connected. Click to place nodes!';
+                document.getElementById('status').textContent = 'Connected. Click to place devices!';
                 ws.send(JSON.stringify({ type: 'GetState' }));
                 // Start message polling after connection
                 setTimeout(startMessagePolling, 2000);
+                // Start role polling after connection
+                setTimeout(startRolePolling, 2000);
+                // Start selector updates after connection
+                setTimeout(startSelectorUpdates, 2000);
             };
             
             ws.onmessage = function(event) {
@@ -2405,6 +2976,8 @@ async fn serve_basic_html() -> Html<&'static str> {
             ws.onclose = function() {
                 document.getElementById('status').textContent = 'Disconnected. Attempting to reconnect...';
                 stopMessagePolling();
+                stopRolePolling();
+                stopSelectorUpdates();
                 setTimeout(connectWebSocket, 1000);
             };
             
@@ -2423,11 +2996,55 @@ async fn serve_basic_html() -> Html<&'static str> {
                     message.connections.forEach(conn => connections.set(`${conn.from}-${conn.to}-${conn.team_id}`, conn));
                     message.teams.forEach(team => teams.set(team.id, team));
                     updateTeamsUI();
+                    // Only update selectors if the access control or sync config drawers are open
+                    if (document.querySelector('[data-drawer-id="access-control"] .drawer-content.expanded')) {
+                        updateAccessControlSelectors();
+                    }
+                    if (document.querySelector('[data-drawer-id="sync-config"] .drawer-content.expanded')) {
+                        updateSyncConfigSelectors();
+                    }
                     draw();
                     break;
                 case 'NodeCreated':
                     nodes.set(message.node.id, message.node);
                     updateNodeSelectors();
+                    
+                    // Handle pending node configuration from tool args
+                    if (window.pendingNodeConfig) {
+                        const config = window.pendingNodeConfig;
+                        const nodeId = message.node.id;
+                        
+                        // Set custom icon if specified
+                        if (config.icon && currentTexturePack === 'custom') {
+                            texturePacks.custom.customNodeIcons.set(nodeId, config.icon);
+                        }
+                        
+                        // Join team if specified
+                        if (config.teamId && teams.has(config.teamId)) {
+                            const team = teams.get(config.teamId);
+                            setTimeout(() => {
+                                ws.send(JSON.stringify({
+                                    type: 'JoinTeam',
+                                    node_id: nodeId,
+                                    team_id: config.teamId,
+                                    owner_node_id: team.owner_node_id
+                                }));
+                            }, 500); // Small delay to ensure node is fully created
+                        }
+                        
+                        // Clear pending config
+                        delete window.pendingNodeConfig;
+                    }
+                    
+                    // Only update selectors if the drawers are open
+                    if (document.querySelector('[data-drawer-id="access-control"] .drawer-content.expanded')) {
+                        updateAccessControlSelectors();
+                    }
+                    if (document.querySelector('[data-drawer-id="sync-config"] .drawer-content.expanded')) {
+                        updateSyncConfigSelectors();
+                    }
+                    // Update tool args selectors
+                    updateToolArgsSelectors();
                     // Update individual node icons if custom texture panel is open
                     if (document.getElementById('customTexturePanel').style.display !== 'none') {
                         updateIndividualNodeIcons();
@@ -2485,6 +3102,10 @@ async fn serve_basic_html() -> Html<&'static str> {
                     connections.delete(`${message.from}-${message.to}-${message.team_id}`);
                     draw();
                     break;
+                case 'SyncOperationCompleted':
+                    // Start animation for the sync operation
+                    startSyncAnimation(message.from, message.to, message.team_id);
+                    break;
                 case 'TeamCreated':
                     const team = message.team;
                     const creatorNode = nodes.get(message.node_id);
@@ -2498,6 +3119,13 @@ async fn serve_basic_html() -> Html<&'static str> {
                             members: [{ node_id: message.node_id, role: 'Owner' }]
                         });
                         updateTeamsUI();
+                        // Only update selectors if the drawers are open
+                        if (document.querySelector('[data-drawer-id="access-control"] .drawer-content.expanded')) {
+                            updateAccessControlSelectors();
+                        }
+                        if (document.querySelector('[data-drawer-id="sync-config"] .drawer-content.expanded')) {
+                            updateSyncConfigSelectors();
+                        }
                         draw();
                         
                         // Check if this is part of a quick setup
@@ -2512,13 +3140,18 @@ async fn serve_basic_html() -> Html<&'static str> {
                     const joinedNode = nodes.get(message.node_id);
                     if (joinedNode) {
                         joinedNode.teams = joinedNode.teams || [];
-                        joinedNode.teams.push(message.team);
+                        // Initially set role to null/undefined to indicate it needs to be queried
+                        const teamInfo = { ...message.team, role: null };
+                        joinedNode.teams.push(teamInfo);
                         const existingTeam = teams.get(message.team.id);
                         if (existingTeam) {
-                            existingTeam.members.push({ node_id: message.node_id, role: message.team.role || 'Member' });
+                            existingTeam.members.push({ node_id: message.node_id, role: 'Member' });
                         }
                         updateTeamsUI();
-                        draw();
+                        // Clear cache and trigger immediate role poll
+                        const joinCacheKey = `${message.node_id}-${message.team.id}`;
+                        roleCache.delete(joinCacheKey);
+                        pollNodeRoles();
                         
                         // Only show notification if not part of bulk operations
                         if (!window.pendingQuickSetup) {
@@ -2586,15 +3219,133 @@ async fn serve_basic_html() -> Html<&'static str> {
                             updateRecentMessages();
                         }
                         
-                        // Show bubble on receiving node 
+                        // Show bubble on receiving node only if it's not the sender
+                        // (sender already showed bubble via MessageSent event)
                         const receivingNode = nodes.get(message.node_id);
-                        if (receivingNode) {
-                            console.log(`📨 Node ${receivingNode.name} received message: "${receivedMessage.text}" from ${authorDisplay}`);
+                        if (receivingNode && actualSenderId !== message.node_id) {
+                            console.log(`📨 Device ${receivingNode.name} received message: "${receivedMessage.text}" from ${authorDisplay}`);
                             showMessageBubble(message.node_id, receivedMessage.text, authorDisplay);
                         }
                     }
                     break;
+                case 'RoleAssigned':
+                    console.log('Received RoleAssigned message:', message);
+                    showNotification(`Role ${message.role} assigned to device successfully`, 'success');
+                    // Clear the cache for this node-team combination to force a fresh query
+                    const cacheKey = `${message.target_node_id}-${message.team_id}`;
+                    roleCache.delete(cacheKey);
+                    // Trigger an immediate role poll to get the actual state
+                    pollNodeRoles();
+                    break;
+                case 'RoleRevoked':
+                    console.log('Received RoleRevoked message:', message);
+                    showNotification(`Role revoked from device successfully (demoted to Member)`, 'success');
+                    // Clear the cache for this node-team combination to force a fresh query
+                    const revokedCacheKey = `${message.target_node_id}-${message.team_id}`;
+                    roleCache.delete(revokedCacheKey);
+                    // Trigger an immediate role poll to get the actual state
+                    pollNodeRoles();
+                    break;
+                case 'TeamRolesResponse':
+                    displayTeamRoles(message.team_id, message.devices);
+                    break;
+                case 'SyncPeersResponse':
+                    displaySyncPeers(message.team_id, message.peers);
+                    break;
+                case 'DeviceRemovedFromTeam':
+                    console.log('Received DeviceRemovedFromTeam message:', message);
+                    showNotification('Device removed from team successfully', 'success');
+                    // Update the node by removing the team
+                    const removedNode = nodes.get(message.node_id);
+                    console.log('Updating node:', removedNode);
+                    if (removedNode && removedNode.teams) {
+                        const oldTeamsCount = removedNode.teams.length;
+                        removedNode.teams = removedNode.teams.filter(t => t.id !== message.team_id);
+                        console.log('Teams updated from', oldTeamsCount, 'to', removedNode.teams.length);
+                    }
+                    // Update UI
+                    updateTeamsUI();
+                    updateAccessControlSelectors();
+                    draw();
+                    break;
+                case 'Error':
+                    console.error('WebSocket error message:', message);
+                    showNotification(message.message, 'error');
+                    break;
+                default:
+                    console.log('Unhandled WebSocket message type:', message.type, message);
+                    break;
             }
+        }
+
+        // Display functions for responses
+        function displayTeamRoles(teamId, devices) {
+            const display = document.getElementById('teamRolesList');
+            display.innerHTML = '';
+            
+            if (!devices || devices.length === 0) {
+                display.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">No devices in this team</p>';
+                return;
+            }
+            
+            devices.forEach(device => {
+                const roleItem = document.createElement('div');
+                roleItem.className = 'role-item';
+                
+                const deviceName = getNodeName(device.device_id) || device.device_id.substring(0, 8) + '...';
+                const roleBadge = document.createElement('span');
+                roleBadge.className = `role-badge ${device.role.toLowerCase()}`;
+                roleBadge.textContent = device.role;
+                
+                roleItem.innerHTML = `
+                    <span>${deviceName}</span>
+                `;
+                roleItem.appendChild(roleBadge);
+                display.appendChild(roleItem);
+            });
+        }
+        
+        function getNodeName(nodeId) {
+            const node = nodes.get(nodeId);
+            return node ? node.name : null;
+        }
+        
+        function displaySyncPeers(teamId, peers) {
+            const display = document.getElementById('syncPeersDisplay');
+            display.innerHTML = '';
+            
+            if (!peers || peers.length === 0) {
+                display.innerHTML = '<p style="color: var(--text-secondary); font-style: italic;">No sync peers configured for this team</p>';
+                return;
+            }
+            
+            peers.forEach(peer => {
+                const peerItem = document.createElement('div');
+                peerItem.className = 'sync-peer-item';
+                
+                peerItem.innerHTML = `
+                    <div class="sync-peer-header">
+                        <span>${peer.address}</span>
+                        <span class="status-indicator ${peer.active ? 'active' : 'inactive'}"></span>
+                    </div>
+                    <div class="sync-peer-info">
+                        <span>Interval: ${peer.interval_secs} seconds</span>
+                        <span>Sync on add: ${peer.sync_now ? 'Yes' : 'No'}</span>
+                    </div>
+                    <div class="sync-peer-actions">
+                        <div class="input-group">
+                            <input type="number" value="${peer.interval_secs}" min="1" placeholder="Interval" id="interval-${peer.address.replace(/[:.]/g, '_')}">
+                            <button class="btn btn-secondary" onclick="updateSyncPeerConfig('${peer.address}', '${teamId}', document.getElementById('interval-${peer.address.replace(/[:.]/g, '_')}').value)">
+                                Update
+                            </button>
+                        </div>
+                        <button class="btn btn-danger" onclick="removeSyncPeer('${peer.address}', '${teamId}')">
+                            Remove
+                        </button>
+                    </div>
+                `;
+                display.appendChild(peerItem);
+            });
         }
 
         // Notification system
@@ -2644,6 +3395,20 @@ async fn serve_basic_html() -> Html<&'static str> {
         function draw() {
             if (!ctx || !canvas) return;
             
+            // Ensure canvas is properly sized before drawing
+            const viewport = document.querySelector('.canvas-viewport');
+            if (viewport) {
+                const rect = viewport.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                
+                // Check if canvas needs resizing
+                if (canvas.displayWidth !== rect.width || canvas.displayHeight !== rect.height) {
+                    console.log('Canvas size mismatch detected, resizing...');
+                    initializeCanvas();
+                    return; // initializeCanvas will call draw() again
+                }
+            }
+            
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
             // Save context and apply viewport transformations
@@ -2685,8 +3450,13 @@ async fn serve_basic_html() -> Html<&'static str> {
                     if (fromNode && toNode) {
                         const color = conn.status === 'Connected' ? '#4CAF50' : 
                                      conn.status === 'Failed' ? '#F44336' : '#FF9800';
+                        
+                        // Check if this connection has an active animation
+                        const animKey = `${conn.from}-${conn.to}-${conn.team_id}`;
+                        const animation = syncAnimations.get(animKey);
+                        
                         // Draw arrow from source (to) to syncer (from) to show data flow direction
-                        drawArrow(toNode, fromNode, color);
+                        drawArrow(toNode, fromNode, color, animation);
                     }
                 });
             }
@@ -2711,6 +3481,64 @@ async fn serve_basic_html() -> Html<&'static str> {
             nodes.forEach(node => {
                 drawNode(node);
             });
+            
+            // Draw multi-connect visual feedback
+            if (isMultiConnecting && multiConnectOrigin) {
+                ctx.save();
+                
+                // Draw path
+                if (multiConnectPath.length > 1) {
+                    ctx.strokeStyle = '#FF6B35';
+                    ctx.lineWidth = 3;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    ctx.moveTo(multiConnectPath[0].x, multiConnectPath[0].y);
+                    for (let i = 1; i < multiConnectPath.length; i++) {
+                        ctx.lineTo(multiConnectPath[i].x, multiConnectPath[i].y);
+                    }
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+                
+                // Highlight origin node
+                const originNode = nodes.get(multiConnectOrigin);
+                if (originNode) {
+                    ctx.strokeStyle = '#FF6B35';
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(originNode.position.x, originNode.position.y, 35, 0, 2 * Math.PI);
+                    ctx.stroke();
+                }
+                
+                // Highlight target nodes
+                multiConnectTargets.forEach(targetId => {
+                    const targetNode = nodes.get(targetId);
+                    if (targetNode) {
+                        ctx.strokeStyle = '#4CAF50';
+                        ctx.lineWidth = 3;
+                        ctx.beginPath();
+                        ctx.arc(targetNode.position.x, targetNode.position.y, 35, 0, 2 * Math.PI);
+                        ctx.stroke();
+                    }
+                });
+                
+                // Draw connection preview lines
+                multiConnectTargets.forEach(targetId => {
+                    const targetNode = nodes.get(targetId);
+                    if (targetNode && originNode) {
+                        ctx.strokeStyle = '#4CAF50';
+                        ctx.lineWidth = 2;
+                        ctx.setLineDash([2, 3]);
+                        ctx.beginPath();
+                        ctx.moveTo(originNode.position.x, originNode.position.y);
+                        ctx.lineTo(targetNode.position.x, targetNode.position.y);
+                        ctx.stroke();
+                        ctx.setLineDash([]);
+                    }
+                });
+                
+                ctx.restore();
+            }
             
             // Restore context
             ctx.restore();
@@ -2741,15 +3569,18 @@ async fn serve_basic_html() -> Html<&'static str> {
                 // Sort teams by role priority for consistent layering
                 const sortedTeams = [...node.teams].sort((a, b) => {
                     const roleOrder = { 'Owner': 0, 'Admin': 1, 'Operator': 2, 'Member': 3 };
-                    return roleOrder[a.role] - roleOrder[b.role];
+                    const aOrder = a.role ? (roleOrder[a.role] || 4) : 5; // null/undefined roles go last
+                    const bOrder = b.role ? (roleOrder[b.role] || 4) : 5;
+                    return aOrder - bOrder;
                 });
                 
                 sortedTeams.forEach((team, index) => {
                     // Use different colors for different roles
-                    let teamColor = '#2196F3'; // Member
+                    let teamColor = '#2196F3'; // Member (default)
                     if (team.role === 'Owner') teamColor = '#FF5722';
                     else if (team.role === 'Admin') teamColor = '#FF9800';
                     else if (team.role === 'Operator') teamColor = '#9C27B0';
+                    else if (!team.role) teamColor = '#808080'; // Gray for unknown/loading role
                     
                     // Draw outline ring - each role gets its own ring
                     ctx.strokeStyle = teamColor;
@@ -2852,7 +3683,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             return img;
         }
 
-        function drawArrow(fromNode, toNode, color = '#666') {
+        function drawArrow(fromNode, toNode, color = '#666', animation = null) {
             const headlen = 10;
             const dx = toNode.position.x - fromNode.position.x;
             const dy = toNode.position.y - fromNode.position.y;
@@ -2886,6 +3717,54 @@ async fn serve_basic_html() -> Html<&'static str> {
             ctx.moveTo(endX, endY);
             ctx.lineTo(endX - headlen * Math.cos(angle + Math.PI / 6), endY - headlen * Math.sin(angle + Math.PI / 6));
             ctx.stroke();
+            
+            // Draw animation effects if present
+            if (animation) {
+                drawSyncAnimation(startX, startY, endX, endY, animation);
+            }
+        }
+        
+        // Draw sync animation particles
+        function drawSyncAnimation(startX, startY, endX, endY, animation) {
+            const dx = endX - startX;
+            const dy = endY - startY;
+            
+            ctx.save();
+            
+            // Draw particles flowing along the arrow
+            animation.particles.forEach(particle => {
+                const t = (animation.progress + particle.offset) % 1;
+                const x = startX + dx * t;
+                const y = startY + dy * t;
+                
+                // Fade in and out
+                const alpha = Math.sin(t * Math.PI) * 0.8;
+                
+                // Glow effect
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = '#4CAF50';
+                
+                // Draw particle
+                ctx.fillStyle = `rgba(76, 175, 80, ${alpha})`;
+                ctx.beginPath();
+                ctx.arc(x, y, particle.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Draw pulse effect at the arrow
+            if (animation.progress < 0.5) {
+                const pulseAlpha = (1 - animation.progress * 2) * 0.3;
+                ctx.strokeStyle = `rgba(76, 175, 80, ${pulseAlpha})`;
+                ctx.lineWidth = 4 + animation.progress * 10;
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = '#4CAF50';
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.stroke();
+            }
+            
+            ctx.restore();
         }
 
         // Coordinate transformation functions
@@ -2923,15 +3802,23 @@ async fn serve_basic_html() -> Html<&'static str> {
         }
 
         // Add all canvas event listeners inside a setup function
+        let canvasEventListenersSetup = false;
         function setupCanvasEventListeners() {
-            if (!canvas) return;
+            if (!canvas || canvasEventListenersSetup) return;
+            canvasEventListenersSetup = true;
+            
+            // Note: Mouse coordinates are calculated in CSS pixels (e.clientX - rect.left)
+            // This is correct for high DPI displays because:
+            // 1. Canvas buffer is sized with devicePixelRatio: canvas.width = rect.width * dpr
+            // 2. Context is scaled by dpr: ctx.scale(dpr, dpr)
+            // 3. All drawing operations use CSS pixel coordinates which are automatically scaled
             
             canvas.addEventListener('click', function(e) {
                 const rect = canvas.getBoundingClientRect();
                 const x = e.clientX - rect.left;
                 const y = e.clientY - rect.top;
             
-            console.log(`Canvas click: screen(${x}, ${y}), canvas size(${canvas.width}, ${canvas.height}), viewport(${viewportX}, ${viewportY}), scale(${viewportScale})`);
+            console.log(`Canvas click: screen(${x}, ${y}), canvas display size(${canvas.displayWidth || rect.width}, ${canvas.displayHeight || rect.height}), buffer size(${canvas.width}, ${canvas.height}), viewport(${viewportX}, ${viewportY}), scale(${viewportScale})`);
             
             const nodeId = getNodeAt(x, y);
             if (nodeId) {
@@ -2947,15 +3834,35 @@ async fn serve_basic_html() -> Html<&'static str> {
                     const clampedY = Math.max(50, Math.min(CANVAS_HEIGHT - 50, worldPos.y));
                     console.log(`Clamped position: (${clampedX}, ${clampedY})`);
                     
+                    // Get node name from tool args or fallback to main input
+                    const toolArgsName = document.getElementById('createNodeName').value.trim();
                     const nameInput = document.getElementById('nodeNameInput');
-                    const name = nameInput.value.trim() || `Node${nodes.size + 1}`;
-                    nameInput.value = '';
+                    const fallbackName = nameInput.value.trim() || `Device${nodes.size + 1}`;
+                    const name = toolArgsName || fallbackName;
                     
+                    // Get other tool args
+                    const nodeIcon = document.getElementById('createNodeIcon').value.trim();
+                    const joinTeamId = document.getElementById('createNodeTeam').value;
+                    
+                    // Clear inputs
+                    nameInput.value = '';
+                    document.getElementById('createNodeName').value = '';
+                    
+                    // Create the node
                     ws.send(JSON.stringify({
                         type: 'CreateNode',
                         name: name,
                         position: { x: clampedX, y: clampedY }
                     }));
+                    
+                    // Store icon and team info for when the node is created
+                    if (nodeIcon || joinTeamId) {
+                        window.pendingNodeConfig = {
+                            icon: nodeIcon,
+                            teamId: joinTeamId,
+                            position: { x: clampedX, y: clampedY }
+                        };
+                    }
                 }
             } else if (currentTool === 'connect') {
                 if (nodeId) {
@@ -2963,17 +3870,48 @@ async fn serve_basic_html() -> Html<&'static str> {
                         // Start connection
                         connectStart = nodeId;
                     } else if (connectStart !== nodeId) {
-                        // Complete connection
-                        if (!selectedTeamId) {
-                            showNotification('Please select a team for sync operations first!', 'warning');
+                        // Complete connection using tool arguments
+                        const connectTeamId = document.getElementById('connectTeam').value;
+                        let interval = parseInt(document.getElementById('connectInterval').value) || 5;
+                        const bidirectional = document.getElementById('connectBidirectional').checked;
+                        const randomInterval = document.getElementById('connectRandomInterval').checked;
+                        const syncNow = document.getElementById('connectSyncNow').checked;
+                        
+                        // Use tool args team or fallback to selected team
+                        const teamId = connectTeamId || selectedTeamId;
+                        if (!teamId) {
+                            showNotification('Please select a team in the connection options or main team selector!', 'warning');
                             return;
                         }
+                        
+                        // Apply random interval if selected
+                        if (randomInterval) {
+                            interval = Math.floor(Math.random() * 10) + 1; // 1-10 seconds
+                        }
+                        
+                        // Create primary connection
                         ws.send(JSON.stringify({
                             type: 'AddSyncConnection',
                             from: connectStart,
                             to: nodeId,
-                            team_id: selectedTeamId
+                            team_id: teamId,
+                            interval_secs: interval,
+                            sync_now: syncNow
                         }));
+                        
+                        // Create reverse connection if bidirectional
+                        if (bidirectional) {
+                            const reverseInterval = randomInterval ? Math.floor(Math.random() * 10) + 1 : interval;
+                            ws.send(JSON.stringify({
+                                type: 'AddSyncConnection',
+                                from: nodeId,
+                                to: connectStart,
+                                team_id: teamId,
+                                interval_secs: reverseInterval,
+                                sync_now: syncNow
+                            }));
+                        }
+                        
                         connectStart = null;
                     } else {
                         // Clicked same node, cancel
@@ -2999,6 +3937,20 @@ async fn serve_basic_html() -> Html<&'static str> {
                     lastPanX = e.clientX;
                     lastPanY = e.clientY;
                     canvas.style.cursor = 'grabbing';
+                }
+            } else if (currentTool === 'connect' && shiftPressed && e.button === 0) {
+                // Start multi-connect mode using connectStart as origin
+                const nodeId = getNodeAt(x, y);
+                if (nodeId && connectStart && connectStart !== nodeId) {
+                    startMultiConnect(connectStart); // Use connectStart as origin
+                    // Add the shift-clicked node as first target
+                    multiConnectTargets.push(nodeId);
+                    console.log('Added first target to multi-connect path:', getNodeName(nodeId) || nodeId.substring(0,8));
+                    // Clear connectStart to prevent regular connect logic from interfering
+                    connectStart = null;
+                    e.preventDefault(); // Prevent default click behavior
+                } else if (!connectStart) {
+                    showNotification('Click on a device first to set the connection origin', 'warning');
                 }
             }
         });
@@ -3032,6 +3984,10 @@ async fn serve_basic_html() -> Html<&'static str> {
                     node_id: dragNode,
                     position: { x: clampedX, y: clampedY }
                 }));
+            } else if (isMultiConnecting && e.buttons === 1) {
+                // Handle multi-connect path tracking
+                addToMultiConnectPath(mousePos.x, mousePos.y);
+                draw(); // Redraw to show visual feedback
             }
             
             // Update canvas cursor
@@ -3044,7 +4000,13 @@ async fn serve_basic_html() -> Html<&'static str> {
             } else if (currentTool === 'place') {
                 canvas.style.cursor = 'crosshair';
             } else if (currentTool === 'connect') {
-                canvas.style.cursor = getNodeAt(x, y) ? 'pointer' : 'crosshair';
+                if (isMultiConnecting) {
+                    canvas.style.cursor = 'crosshair';
+                } else if (shiftPressed) {
+                    canvas.style.cursor = getNodeAt(x, y) ? 'copy' : 'crosshair';
+                } else {
+                    canvas.style.cursor = getNodeAt(x, y) ? 'pointer' : 'crosshair';
+                }
             }
             
             // Redraw if we're in connect mode to show preview line
@@ -3058,6 +4020,9 @@ async fn serve_basic_html() -> Html<&'static str> {
             isPanning = false;
             if (currentTool === 'select') {
                 canvas.style.cursor = 'grab';
+            } else if (isMultiConnecting) {
+                // Finish multi-connect
+                finishMultiConnect();
             }
         });
 
@@ -3168,7 +4133,7 @@ async fn serve_basic_html() -> Html<&'static str> {
             }
         }
 
-        function viewNodeInfo() {
+        function viewDeviceInfo() {
             if (contextMenuNode) {
                 const node = nodes.get(contextMenuNode);
                 if (node) {
@@ -3185,7 +4150,7 @@ Status: ${JSON.stringify(node.status)}<br>
 Daemon Port: ${node.daemon_port}<br>
 REST Port: ${node.rest_port}<br>
 Connections: ${incomingCount} in, ${outgoingCount} out`;
-                    showNotification(info, 'info', 'Node Information');
+                    showNotification(info, 'info', 'Device Information');
                 }
                 document.getElementById('contextMenu').style.display = 'none';
             }
@@ -3207,17 +4172,75 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             });
             document.getElementById(tool + 'Tool').classList.add('active');
             
+            // Show/hide tool arguments panel
+            showToolArgs(tool);
+            
             // Update instructions
             const header = document.querySelector('.header p');
             if (tool === 'select') {
-                header.textContent = 'Click and drag to move nodes. Right-click for options.';
+                header.textContent = 'Click and drag to move devices. Right-click for options.';
             } else if (tool === 'place') {
-                header.textContent = 'Click on empty space to place a new node.';
+                header.textContent = 'Click on empty space to place a new device.';
             } else if (tool === 'connect') {
-                header.textContent = 'Click on receiver node, then click on source node. Arrow shows data flow direction.';
+                header.textContent = 'Click on receiver device, then click on source device. Arrow shows data flow direction.';
             }
             
             draw();
+        }
+        
+        // Tool Arguments Functions
+        function showToolArgs(tool) {
+            const ribbon = document.getElementById('toolArgsRibbon');
+            const sections = document.querySelectorAll('.ribbon-section');
+            
+            // Hide all sections first
+            sections.forEach(section => section.style.display = 'none');
+            
+            if (tool === 'place') {
+                document.getElementById('createNodeArgs').style.display = 'flex';
+                ribbon.style.display = 'flex';
+                updateToolArgsSelectors();
+            } else if (tool === 'connect') {
+                document.getElementById('connectNodesArgs').style.display = 'flex';
+                ribbon.style.display = 'flex';
+                updateToolArgsSelectors();
+            } else {
+                ribbon.style.display = 'none';
+            }
+        }
+        
+        function updateToolArgsSelectors() {
+            // Update create node team selector
+            const createNodeTeamSelector = document.getElementById('createNodeTeam');
+            if (createNodeTeamSelector) {
+                const currentValue = createNodeTeamSelector.value;
+                createNodeTeamSelector.innerHTML = '<option value="">-- No team --</option>';
+                teams.forEach((team, id) => {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = team.name || `Team ${id.slice(0, 8)}`;
+                    createNodeTeamSelector.appendChild(option);
+                });
+                if (currentValue && teams.has(currentValue)) {
+                    createNodeTeamSelector.value = currentValue;
+                }
+            }
+            
+            // Update connect team selector
+            const connectTeamSelector = document.getElementById('connectTeam');
+            if (connectTeamSelector) {
+                const currentValue = connectTeamSelector.value;
+                connectTeamSelector.innerHTML = '<option value="">-- Select Team --</option>';
+                teams.forEach((team, id) => {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = team.name || `Team ${id.slice(0, 8)}`;
+                    connectTeamSelector.appendChild(option);
+                });
+                if (currentValue && teams.has(currentValue)) {
+                    connectTeamSelector.value = currentValue;
+                }
+            }
         }
 
         function updateTeamsUI() {
@@ -3325,12 +4348,12 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             // Update node selector for team creation
             const nodeSelector = document.getElementById('nodeSelector');
             const currentNodeValue = nodeSelector.value;
-            nodeSelector.innerHTML = '<option value="">-- Select Node --</option>';
+            nodeSelector.innerHTML = '<option value="">-- Select Device --</option>';
             
             // Update join node selector
             const joinNodeSelector = document.getElementById('joinNodeSelector');
             const currentJoinNodeValue = joinNodeSelector.value;
-            joinNodeSelector.innerHTML = '<option value="">-- Select Node --</option>';
+            joinNodeSelector.innerHTML = '<option value="">-- Select Device --</option>';
             
             nodes.forEach(node => {
                 // Add to create team selector (only running nodes)
@@ -3436,7 +4459,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             const teamName = teamNameInput.value.trim();
             
             if (!nodeId) {
-                showNotification('Please select a node to create the team.', 'warning');
+                showNotification('Please select a device to create the team.', 'warning');
                 return;
             }
             
@@ -3464,7 +4487,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             const teamId = availableTeamsSelector.value;
             
             if (!nodeId) {
-                showNotification('Please select a node to join the team.', 'warning');
+                showNotification('Please select a device to join the team.', 'warning');
                 return;
             }
             
@@ -3487,7 +4510,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             }));
             
             const node = nodes.get(nodeId);
-            showNotification(`Adding ${node ? node.name : 'node'} to team "${team.name}"...`, 'info');
+            showNotification(`Adding ${node ? node.name : 'device'} to team "${team.name}"...`, 'info');
         }
 
         function addAllNodesToSelectedTeam() {
@@ -3515,11 +4538,11 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             });
 
             if (nodesToAdd.length === 0) {
-                showNotification('All running nodes are already in this team.', 'info');
+                showNotification('All running devices are already in this team.', 'info');
                 return;
             }
 
-            if (confirm(`Add ${nodesToAdd.length} nodes to team "${team.name}"?`)) {
+            if (confirm(`Add ${nodesToAdd.length} devices to team "${team.name}"?`)) {
                 // Suppress notifications during bulk operation
                 suppressNotifications = true;
                 
@@ -3535,7 +4558,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                 // Show single notification after operations are sent
                 setTimeout(() => {
                     suppressNotifications = false;
-                    showNotification(`Adding ${nodesToAdd.length} nodes to team "${team.name}"`, 'success');
+                    showNotification(`Adding ${nodesToAdd.length} devices to team "${team.name}"`, 'success');
                 }, 100);
             }
         }
@@ -3561,7 +4584,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             });
 
             if (teamNodes.length < 2) {
-                showNotification('Need at least 2 nodes in the team to create sync connections.', 'warning');
+                showNotification('Need at least 2 devices in the team to create sync connections.', 'warning');
                 return;
             }
 
@@ -3599,7 +4622,9 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                         type: 'AddSyncConnection',
                         from: from,
                         to: to,
-                        team_id: selectedTeamId
+                        team_id: selectedTeamId,
+                        interval_secs: 5,
+                        sync_now: true
                     }));
                 });
                 
@@ -3626,7 +4651,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             // Find the owner node
             const ownerNode = nodes.get(team.owner_node_id);
             if (!ownerNode || ownerNode.status !== 'Running') {
-                showNotification('Team owner node is not running. Cannot create sync connections.', 'error');
+                showNotification('Team owner device is not running. Cannot create sync connections.', 'error');
                 return;
             }
 
@@ -3642,7 +4667,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             });
 
             if (memberNodes.length === 0) {
-                showNotification('No other running team members found. Add more nodes to the team first.', 'warning');
+                showNotification('No other running team members found. Add more devices to the team first.', 'warning');
                 return;
             }
 
@@ -3667,7 +4692,9 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                         type: 'AddSyncConnection',
                         from: memberNode.id,      // Member syncs FROM owner
                         to: ownerNode.id,         // TO the owner
-                        team_id: selectedTeamId
+                        team_id: selectedTeamId,
+                        interval_secs: 5,
+                        sync_now: true
                     }));
                 });
 
@@ -3690,11 +4717,11 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             });
 
             if (runningNodes.length === 0) {
-                showNotification('No running nodes available. Place and start some nodes first.', 'warning');
+                showNotification('No running devices available. Place and start some devices first.', 'warning');
                 return;
             }
 
-            const teamName = prompt(`Quick Team Setup\n\nThis will:\n1. Create a new team with ${runningNodes[0].name} as owner\n2. Add all ${runningNodes.length} running nodes to the team\n3. Set up sync connections from members to owner\n\nEnter team name (or cancel):`);
+            const teamName = prompt(`Quick Team Setup\n\nThis will:\n1. Create a new team with ${runningNodes[0].name} as owner\n2. Add all ${runningNodes.length} running devices to the team\n3. Set up sync connections from members to owner\n\nEnter team name (or cancel):`);
             
             if (!teamName || !teamName.trim()) {
                 return;
@@ -3754,7 +4781,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                     // Re-enable notifications and show final success
                     setTimeout(() => {
                         suppressNotifications = false;
-                        showNotification(`Team "${setup.teamName}" setup complete with ${setup.allNodes.length} nodes!`, 'success', 'Quick Team Setup');
+                        showNotification(`Team "${setup.teamName}" setup complete with ${setup.allNodes.length} devices!`, 'success', 'Quick Team Setup');
                         
                         // Clear pending setup AFTER everything is done
                         delete window.pendingQuickSetup;
@@ -3782,7 +4809,7 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             const teamSelector = document.getElementById('messageTeamSelector');
             const currentSenderValue = senderSelector.value;
             
-            senderSelector.innerHTML = '<option value="">-- Select Sender Node --</option>';
+            senderSelector.innerHTML = '<option value="">-- Select Sender Device --</option>';
             
             const selectedTeamId = teamSelector.value;
             if (selectedTeamId) {
@@ -3807,18 +4834,18 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             updateSendButtonState();
         }
 
-        function sendMessageToNode() {
+        function sendMessageToDevice() {
             if (!contextMenuNode) return;
             
             const node = nodes.get(contextMenuNode);
             if (!node || !node.teams || node.teams.length === 0) {
-                showNotification('This node is not part of any team. Join a team first to send messages.', 'warning');
+                showNotification('This device is not part of any team. Join a team first to send messages.', 'warning');
                 document.getElementById('contextMenu').style.display = 'none';
                 return;
             }
             
             // Show available teams for this node
-            let teamOptions = 'Available teams for this node:\n';
+            let teamOptions = 'Available teams for this device:\n';
             node.teams.forEach(team => {
                 teamOptions += `- ${team.name} (Role: ${team.role})\n`;
             });
@@ -3870,21 +4897,32 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             bubble.innerHTML = `<strong>${authorName}:</strong> ${message}`;
             bubble.dataset.nodeId = nodeId; // Store node ID for position updates
             
-            // Position bubble above node (convert world coordinates to screen)
-            updateMessageBubblePosition(bubble, node);
-            
-            document.body.appendChild(bubble);
-            
             // Store bubble reference
             if (!messageBubbles.has(nodeId)) {
                 messageBubbles.set(nodeId, []);
             }
-            messageBubbles.get(nodeId).push(bubble);
             
-            // Animate in
-            setTimeout(() => {
-                bubble.classList.add('show');
-            }, 100);
+            // Calculate bubble index for stacking
+            const existingBubbles = messageBubbles.get(nodeId);
+            const bubbleIndex = existingBubbles.length;
+            bubble.dataset.bubbleIndex = bubbleIndex; // Store index for position calculations
+            
+            // Add bubble to DOM first
+            document.body.appendChild(bubble);
+            
+            // Add to tracking array
+            existingBubbles.push(bubble);
+            
+            // Position bubble after it's in the DOM and has dimensions
+            // Use requestAnimationFrame to ensure the bubble is rendered
+            requestAnimationFrame(() => {
+                updateMessageBubblePosition(bubble, node);
+                
+                // Animate in after positioning
+                setTimeout(() => {
+                    bubble.classList.add('show');
+                }, 50);
+            });
             
             // Remove after 6 seconds (longer duration for easier visibility)
             setTimeout(() => {
@@ -3900,6 +4938,11 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
                         if (index > -1) {
                             bubbles.splice(index, 1);
                         }
+                        // Update indices of remaining bubbles
+                        bubbles.forEach((b, i) => {
+                            b.dataset.bubbleIndex = i;
+                            updateMessageBubblePosition(b, node);
+                        });
                         if (bubbles.length === 0) {
                             messageBubbles.delete(nodeId);
                         }
@@ -3912,8 +4955,20 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             if (!canvas) return;
             const rect = canvas.getBoundingClientRect();
             const screenPos = worldToScreen(node.position.x, node.position.y);
-            bubble.style.left = (rect.left + screenPos.x - 100) + 'px';
-            bubble.style.top = (rect.top + screenPos.y - 60) + 'px';
+            
+            // Get the actual bubble dimensions
+            const bubbleRect = bubble.getBoundingClientRect();
+            const bubbleWidth = bubbleRect.width || 200; // fallback width
+            const bubbleHeight = bubbleRect.height || 40; // fallback height
+            
+            // Get bubble index for stacking
+            const bubbleIndex = parseInt(bubble.dataset.bubbleIndex) || 0;
+            const stackOffset = bubbleIndex * (bubbleHeight + 10); // 10px spacing between bubbles
+            
+            // Center the bubble horizontally on the node
+            bubble.style.left = (rect.left + screenPos.x - bubbleWidth / 2) + 'px';
+            // Position bubble above the node with stacking offset
+            bubble.style.top = (rect.top + screenPos.y - 30 - bubbleHeight - 10 - stackOffset) + 'px';
         }
         
         function updateAllMessageBubbles() {
@@ -3974,6 +5029,147 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             }
         }
 
+        // Role polling functions
+        let rolePollingInterval = null;
+        const roleCache = new Map(); // nodeId-teamId -> { role, timestamp }
+        const ROLE_CACHE_TTL = 1000; // 1 second cache for responsive updates
+
+        function startRolePolling() {
+            if (rolePollingInterval) {
+                clearInterval(rolePollingInterval);
+            }
+            
+            // Poll every 500ms for role updates (more responsive)
+            rolePollingInterval = setInterval(pollNodeRoles, 500);
+            
+            // Also poll immediately
+            setTimeout(pollNodeRoles, 100);
+        }
+
+        function stopRolePolling() {
+            if (rolePollingInterval) {
+                clearInterval(rolePollingInterval);
+                rolePollingInterval = null;
+            }
+        }
+
+        // Selector update polling
+        let selectorUpdateInterval = null;
+
+        function startSelectorUpdates() {
+            if (selectorUpdateInterval) {
+                clearInterval(selectorUpdateInterval);
+            }
+            
+            // Update selectors every 2 seconds to catch new nodes joining teams
+            selectorUpdateInterval = setInterval(() => {
+                // Only update if the drawers are actually open
+                const accessControlOpen = document.querySelector('[data-drawer-id="access-control"] .drawer-content.expanded');
+                const syncConfigOpen = document.querySelector('[data-drawer-id="sync-config"] .drawer-content.expanded');
+                const messageControlOpen = document.querySelector('[data-drawer-id="team-messaging"] .drawer-content.expanded');
+                
+                if (accessControlOpen) {
+                    // Update only the node selectors, not the team selectors
+                    updateRoleNodeSelectors();
+                    updateDeviceRemovalNodeSelectors();
+                }
+                
+                if (syncConfigOpen) {
+                    updateSyncNodeSelectors();
+                }
+                
+                if (messageControlOpen) {
+                    // Update message sender selector if a team is selected
+                    const teamId = document.getElementById('messageTeamSelector').value;
+                    if (teamId) {
+                        updateMessageSenderSelector();
+                    }
+                }
+            }, 2000);
+        }
+
+        function stopSelectorUpdates() {
+            if (selectorUpdateInterval) {
+                clearInterval(selectorUpdateInterval);
+                selectorUpdateInterval = null;
+            }
+        }
+
+        async function queryNodeRole(nodeId, teamId) {
+            const node = nodes.get(nodeId);
+            if (!node || node.status !== 'Running') {
+                return null;
+            }
+
+            // Check cache first
+            const cacheKey = `${nodeId}-${teamId}`;
+            const cached = roleCache.get(cacheKey);
+            if (cached && Date.now() - cached.timestamp < ROLE_CACHE_TTL) {
+                return cached.role;
+            }
+
+            try {
+                // First get the device ID for this node
+                const deviceIdResponse = await fetch(`http://127.0.0.1:${node.rest_port}/api/v1/device-id`);
+                if (!deviceIdResponse.ok) {
+                    console.warn(`Failed to get device ID for node ${nodeId}`);
+                    return null;
+                }
+                
+                const deviceIdData = await deviceIdResponse.json();
+                const deviceId = deviceIdData.device_id;
+
+                // Then query the role
+                const roleResponse = await fetch(`http://127.0.0.1:${node.rest_port}/api/v1/teams/${teamId}/devices/${deviceId}/role`);
+                if (!roleResponse.ok) {
+                    console.warn(`Failed to get role for device ${deviceId} in team ${teamId}`);
+                    return null;
+                }
+                
+                const role = await roleResponse.json();
+                
+                // Update cache
+                roleCache.set(cacheKey, { role, timestamp: Date.now() });
+                
+                return role;
+            } catch (error) {
+                console.error(`Error querying role for node ${nodeId}:`, error);
+                return null;
+            }
+        }
+
+        async function pollNodeRoles() {
+            const updatePromises = [];
+            
+            // Query roles for all running nodes in teams
+            // We poll frequently (500ms) to ensure the UI accurately reflects the actual node state
+            // since role changes may take time to propagate through the daemon sync
+            nodes.forEach((node, nodeId) => {
+                if (node.status === 'Running' && node.teams && node.teams.length > 0) {
+                    node.teams.forEach((team, index) => {
+                        updatePromises.push(
+                            queryNodeRole(nodeId, team.id).then(role => {
+                                if (role && role !== team.role) {
+                                    // Update the local state with the actual role
+                                    node.teams[index].role = role;
+                                    return true; // Indicates a change
+                                }
+                                return false;
+                            })
+                        );
+                    });
+                }
+            });
+            
+            // Wait for all queries to complete
+            const results = await Promise.all(updatePromises);
+            
+            // Redraw if any roles changed
+            if (results.some(changed => changed)) {
+                draw();
+            }
+        }
+
         function pollForNewMessages() {
             // Get all teams and their member nodes
             const teamNodeMap = new Map();
@@ -4028,6 +5224,683 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
             }
         });
 
+        // Access Control event listeners
+        document.getElementById('roleActingNodeSelector').addEventListener('change', updateAccessControlButtonStates);
+        document.getElementById('roleTargetNodeSelector').addEventListener('change', updateAccessControlButtonStates);
+        document.getElementById('roleTeamSelector').addEventListener('change', function() {
+            updateRoleNodeSelectors();
+            updateAccessControlButtonStates();
+        });
+        document.getElementById('newRoleSelector').addEventListener('change', updateAccessControlButtonStates);
+        
+        document.getElementById('deviceRemovalActingNodeSelector').addEventListener('change', updateDeviceRemovalButtonState);
+        document.getElementById('deviceRemovalNodeSelector').addEventListener('change', updateDeviceRemovalButtonState);
+        document.getElementById('deviceRemovalTeamSelector').addEventListener('change', function() {
+            updateDeviceRemovalNodeSelectors();
+            updateDeviceRemovalButtonState();
+        });
+        
+        // Removed overviewTeamSelector - Team Overview section was removed
+        
+        // Sync Peer event listeners
+        document.getElementById('syncFromNodeSelector').addEventListener('change', updateSyncButtonState);
+        document.getElementById('syncToNodeSelector').addEventListener('change', updateSyncButtonState);
+        document.getElementById('syncTeamSelector').addEventListener('change', function() {
+            updateSyncNodeSelectors();
+            updateSyncButtonState();
+        });
+        document.getElementById('syncInterval').addEventListener('input', updateSyncButtonState);
+        document.getElementById('customSyncUrl').addEventListener('input', updateSyncButtonState);
+        
+        // Tool Arguments event listeners
+        document.getElementById('connectRandomInterval').addEventListener('change', function() {
+            const intervalInput = document.getElementById('connectInterval');
+            if (this.checked) {
+                intervalInput.disabled = true;
+                intervalInput.placeholder = 'Random (1-10s)';
+            } else {
+                intervalInput.disabled = false;
+                intervalInput.placeholder = '5';
+            }
+        });
+
+        // Access Control Functions
+        function assignRoleFromUI() {
+            const actingNodeId = document.getElementById('roleActingNodeSelector').value;
+            const targetNodeId = document.getElementById('roleTargetNodeSelector').value;
+            const teamId = document.getElementById('roleTeamSelector').value;
+            const role = document.getElementById('newRoleSelector').value;
+            
+            if (!actingNodeId || !targetNodeId || !teamId || !role) {
+                showNotification('Please select acting node, target node, team, and role', 'warning');
+                return;
+            }
+            
+            if (actingNodeId === targetNodeId) {
+                showNotification('Acting node and target node cannot be the same', 'warning');
+                return;
+            }
+            
+            const payload = {
+                type: 'AssignRole',
+                node_id: actingNodeId,
+                target_node_id: targetNodeId,
+                team_id: teamId,
+                role: role
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Sending AssignRole message:', payload);
+                ws.send(JSON.stringify(payload));
+                showNotification(`Assigning ${role} role to target device`, 'success');
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        function revokeRoleFromUI() {
+            const actingNodeId = document.getElementById('roleActingNodeSelector').value;
+            const targetNodeId = document.getElementById('roleTargetNodeSelector').value;
+            const teamId = document.getElementById('roleTeamSelector').value;
+            const role = document.getElementById('newRoleSelector').value;
+            
+            if (!actingNodeId || !targetNodeId || !teamId || !role) {
+                showNotification('Please select acting node, target node, team, and role', 'warning');
+                return;
+            }
+            
+            const payload = {
+                type: 'RevokeRole',
+                node_id: actingNodeId,
+                target_node_id: targetNodeId,
+                team_id: teamId,
+                role: role
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Sending RevokeRole message:', payload);
+                ws.send(JSON.stringify(payload));
+                showNotification(`Revoking ${role} role from target device`, 'success');
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        function removeDeviceFromTeamUI() {
+            const actingNodeId = document.getElementById('deviceRemovalActingNodeSelector').value;
+            const targetNodeId = document.getElementById('deviceRemovalNodeSelector').value;
+            const teamId = document.getElementById('deviceRemovalTeamSelector').value;
+            
+            if (!actingNodeId || !targetNodeId || !teamId) {
+                showNotification('Please select acting node, target device, and team', 'warning');
+                return;
+            }
+            
+            if (actingNodeId === targetNodeId) {
+                showNotification('Acting node and target device cannot be the same', 'warning');
+                return;
+            }
+            
+            if (!confirm('Are you sure you want to remove this device from the team? This action cannot be undone.')) {
+                return;
+            }
+            
+            const payload = {
+                type: 'RemoveDeviceFromTeam',
+                node_id: actingNodeId,
+                target_node_id: targetNodeId,
+                team_id: teamId
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                console.log('Sending RemoveDeviceFromTeam message:', payload);
+                ws.send(JSON.stringify(payload));
+                showNotification('Removing device from team', 'success');
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        // Removed showTeamOverview - Query Team Roles is not a real endpoint
+        
+        // Sync Configuration Functions
+        function toggleAdvancedMode() {
+            const advancedOptions = document.getElementById('advancedSyncOptions');
+            const isChecked = document.getElementById('advancedMode').checked;
+            advancedOptions.style.display = isChecked ? 'block' : 'none';
+            
+            // Clear/update fields based on mode
+            if (isChecked) {
+                document.getElementById('syncToNodeSelector').disabled = true;
+                document.getElementById('syncToNodeSelector').value = '';
+            } else {
+                document.getElementById('syncToNodeSelector').disabled = false;
+                document.getElementById('customSyncUrl').value = '';
+            }
+            updateSyncButtonState();
+        }
+        
+        function addSyncConnectionFromUI() {
+            const fromNodeId = document.getElementById('syncFromNodeSelector').value;
+            const teamId = document.getElementById('syncTeamSelector').value;
+            const interval = parseInt(document.getElementById('syncInterval').value) || 5;
+            const syncNow = document.getElementById('syncNowFlag').checked;
+            const advancedMode = document.getElementById('advancedMode').checked;
+            
+            if (!fromNodeId || !teamId) {
+                showNotification('Please select source node and team', 'warning');
+                return;
+            }
+            
+            if (advancedMode) {
+                // Advanced mode - use custom URL
+                const customUrl = document.getElementById('customSyncUrl').value.trim();
+                if (!customUrl) {
+                    showNotification('Please enter a custom URL', 'warning');
+                    return;
+                }
+                
+                // Extract host and port from URL
+                let address;
+                try {
+                    const url = new URL(customUrl);
+                    address = url.hostname + ':' + (url.port || (url.protocol === 'https:' ? '443' : '80'));
+                } catch (e) {
+                    // Fallback for simple IP:Port format
+                    if (customUrl.includes(':') && customUrl.match(/^[a-zA-Z0-9.-]+:\d+$/)) {
+                        address = customUrl;
+                    } else {
+                        showNotification('Please enter a valid URL or IP:Port', 'warning');
+                        return;
+                    }
+                }
+                
+                // For custom URLs, we'll use the REST API directly
+                // This would need backend support to add external sync peers
+                showNotification('Adding external sync peer: ' + address, 'info');
+                // TODO: Implement backend support for external sync peers
+                
+            } else {
+                // Normal mode - sync between visualization nodes
+                const toNodeId = document.getElementById('syncToNodeSelector').value;
+                if (!toNodeId) {
+                    showNotification('Please select target node', 'warning');
+                    return;
+                }
+                
+                if (fromNodeId === toNodeId) {
+                    showNotification('Source and target nodes cannot be the same', 'warning');
+                    return;
+                }
+                
+                // Check if nodes are in the same team
+                const fromNode = nodes.get(fromNodeId);
+                const toNode = nodes.get(toNodeId);
+                
+                if (!fromNode || !toNode) {
+                    showNotification('Selected nodes not found', 'error');
+                    return;
+                }
+                
+                const fromInTeam = fromNode.teams && fromNode.teams.some(t => t.id === teamId);
+                const toInTeam = toNode.teams && toNode.teams.some(t => t.id === teamId);
+                
+                if (!fromInTeam || !toInTeam) {
+                    showNotification('Both nodes must be members of the selected team', 'warning');
+                    return;
+                }
+                
+                // Add sync connection
+                const payload = {
+                    type: 'AddSyncConnection',
+                    from: fromNodeId,
+                    to: toNodeId,
+                    team_id: teamId,
+                    interval_secs: interval,
+                    sync_now: syncNow
+                };
+                
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    console.log('Adding sync connection:', payload);
+                    ws.send(JSON.stringify(payload));
+                    showNotification('Adding sync connection', 'success');
+                } else {
+                    showNotification('WebSocket not connected', 'error');
+                }
+            }
+        }
+        
+        // Removed loadSyncPeers function - UI simplified
+        
+        // Removed triggerManualSync function - UI simplified
+        
+        function removeSyncPeer(address, teamId) {
+            const payload = {
+                type: 'RemoveSyncPeer',
+                address: address,
+                teamId: teamId
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(payload));
+                showNotification('Removing sync peer', 'success');
+                // Reload the list
+                loadSyncPeers();
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        function updateSyncPeerConfig(address, teamId, newInterval) {
+            const payload = {
+                type: 'UpdateSyncPeerConfig',
+                address: address,
+                teamId: teamId,
+                intervalSecs: parseInt(newInterval),
+                syncNow: false
+            };
+            
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(payload));
+                showNotification('Updating sync peer configuration', 'success');
+            } else {
+                showNotification('WebSocket not connected', 'error');
+            }
+        }
+        
+        // Update selector validation functions
+        function updateAccessControlButtonStates() {
+            const actingNodeSelected = document.getElementById('roleActingNodeSelector').value;
+            const targetNodeSelected = document.getElementById('roleTargetNodeSelector').value;
+            const teamSelected = document.getElementById('roleTeamSelector').value;
+            const roleSelected = document.getElementById('newRoleSelector').value;
+            
+            const allSelected = actingNodeSelected && targetNodeSelected && teamSelected && roleSelected;
+            const sameNode = actingNodeSelected === targetNodeSelected && actingNodeSelected !== '';
+            
+            document.getElementById('assignRoleBtn').disabled = !allSelected || sameNode;
+            document.getElementById('revokeRoleBtn').disabled = !allSelected || sameNode;
+        }
+        
+        function updateDeviceRemovalButtonState() {
+            const actingNodeSelected = document.getElementById('deviceRemovalActingNodeSelector').value;
+            const targetNodeSelected = document.getElementById('deviceRemovalNodeSelector').value;
+            const teamSelected = document.getElementById('deviceRemovalTeamSelector').value;
+            
+            const allSelected = actingNodeSelected && targetNodeSelected && teamSelected;
+            const sameNode = actingNodeSelected === targetNodeSelected;
+            
+            document.getElementById('removeDeviceBtn').disabled = !allSelected || sameNode;
+        }
+        
+        // Removed updateTeamOverviewButtonState - Team Overview section was removed
+        
+        function updateSyncButtonState() {
+            const fromNodeSelected = document.getElementById('syncFromNodeSelector').value;
+            const teamSelected = document.getElementById('syncTeamSelector').value;
+            const advancedMode = document.getElementById('advancedMode').checked;
+            const toNodeSelected = document.getElementById('syncToNodeSelector').value;
+            const customUrlEntered = document.getElementById('customSyncUrl').value.trim();
+            
+            let isValid = false;
+            
+            if (fromNodeSelected && teamSelected) {
+                if (advancedMode) {
+                    isValid = customUrlEntered.length > 0;
+                } else {
+                    isValid = toNodeSelected.length > 0 && fromNodeSelected !== toNodeSelected;
+                }
+            }
+            
+            document.getElementById('addSyncBtn').disabled = !isValid;
+        }
+        
+        // Update node selectors for new UI elements
+        function updateAccessControlSelectors() {
+            // Get current team selections
+            const roleTeamId = document.getElementById('roleTeamSelector').value;
+            const deviceRemovalTeamId = document.getElementById('deviceRemovalTeamSelector').value;
+            
+            // Update team selectors first
+            const teamSelectors = [
+                'roleTeamSelector',
+                'deviceRemovalTeamSelector'
+            ];
+            
+            teamSelectors.forEach(selectorId => {
+                const selector = document.getElementById(selectorId);
+                const currentValue = selector.value;
+                selector.innerHTML = '<option value="">-- Select Team --</option>';
+                teams.forEach((team, id) => {
+                    const option = document.createElement('option');
+                    option.value = id;
+                    option.textContent = team.name || `Team ${id.slice(0, 8)}`;
+                    selector.appendChild(option);
+                });
+                if (currentValue && teams.has(currentValue)) {
+                    selector.value = currentValue;
+                }
+            });
+            
+            // Update node selectors based on selected teams
+            updateRoleNodeSelectors();
+            updateDeviceRemovalNodeSelectors();
+        }
+        
+        function updateRoleNodeSelectors() {
+            const teamId = document.getElementById('roleTeamSelector').value;
+            
+            // Role acting node selector - only show nodes in the selected team
+            const roleActingNodeSelector = document.getElementById('roleActingNodeSelector');
+            const currentActingNodeValue = roleActingNodeSelector.value;
+            roleActingNodeSelector.innerHTML = '<option value="">-- Select Acting Device --</option>';
+            
+            if (teamId) {
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running' && node.teams && node.teams.some(t => t.id === teamId)) {
+                        const teamInfo = node.teams.find(t => t.id === teamId);
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = `${node.name || `Device ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        roleActingNodeSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            if (currentActingNodeValue && roleActingNodeSelector.querySelector(`option[value="${currentActingNodeValue}"]`)) {
+                roleActingNodeSelector.value = currentActingNodeValue;
+            }
+            
+            // Role target node selector - show all nodes in the team
+            const roleTargetNodeSelector = document.getElementById('roleTargetNodeSelector');
+            const currentTargetNodeValue = roleTargetNodeSelector.value;
+            roleTargetNodeSelector.innerHTML = '<option value="">-- Select Target Device --</option>';
+            
+            if (teamId) {
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running' && node.teams && node.teams.some(t => t.id === teamId)) {
+                        const teamInfo = node.teams.find(t => t.id === teamId);
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = `${node.name || `Device ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        roleTargetNodeSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            if (currentTargetNodeValue && roleTargetNodeSelector.querySelector(`option[value="${currentTargetNodeValue}"]`)) {
+                roleTargetNodeSelector.value = currentTargetNodeValue;
+            }
+        }
+        
+        function updateDeviceRemovalNodeSelectors() {
+            const teamId = document.getElementById('deviceRemovalTeamSelector').value;
+            
+            // Device removal acting node selector - only show nodes in the selected team
+            const deviceRemovalActingSelector = document.getElementById('deviceRemovalActingNodeSelector');
+            const currentRemovalActingValue = deviceRemovalActingSelector.value;
+            deviceRemovalActingSelector.innerHTML = '<option value="">-- Select Acting Device --</option>';
+            
+            if (teamId) {
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running' && node.teams && node.teams.some(t => t.id === teamId)) {
+                        const teamInfo = node.teams.find(t => t.id === teamId);
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = `${node.name || `Device ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        deviceRemovalActingSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            if (currentRemovalActingValue && deviceRemovalActingSelector.querySelector(`option[value="${currentRemovalActingValue}"]`)) {
+                deviceRemovalActingSelector.value = currentRemovalActingValue;
+            }
+            
+            // Device removal target selector - show all nodes in the team
+            const deviceRemovalSelector = document.getElementById('deviceRemovalNodeSelector');
+            const currentRemovalNodeValue = deviceRemovalSelector.value;
+            deviceRemovalSelector.innerHTML = '<option value="">-- Select Device --</option>';
+            
+            if (teamId) {
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running' && node.teams && node.teams.some(t => t.id === teamId)) {
+                        const teamInfo = node.teams.find(t => t.id === teamId);
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = `${node.name || `Device ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        deviceRemovalSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            if (currentRemovalNodeValue && deviceRemovalSelector.querySelector(`option[value="${currentRemovalNodeValue}"]`)) {
+                deviceRemovalSelector.value = currentRemovalNodeValue;
+            }
+        }
+        
+        function updateSyncConfigSelectors() {
+            // Team selector first
+            const syncTeamSelector = document.getElementById('syncTeamSelector');
+            const currentTeamValue = syncTeamSelector.value;
+            syncTeamSelector.innerHTML = '<option value="">-- Select Team --</option>';
+            teams.forEach((team, id) => {
+                const option = document.createElement('option');
+                option.value = id;
+                option.textContent = team.name || `Team ${id.slice(0, 8)}`;
+                syncTeamSelector.appendChild(option);
+            });
+            if (currentTeamValue && teams.has(currentTeamValue)) {
+                syncTeamSelector.value = currentTeamValue;
+            }
+            
+            // Update node selectors based on selected team
+            updateSyncNodeSelectors();
+        }
+        
+        function updateSyncNodeSelectors() {
+            const teamId = document.getElementById('syncTeamSelector').value;
+            
+            // From node selector - only show nodes in the selected team
+            const syncFromNodeSelector = document.getElementById('syncFromNodeSelector');
+            const currentFromValue = syncFromNodeSelector.value;
+            syncFromNodeSelector.innerHTML = '<option value="">-- Select Source Device --</option>';
+            
+            if (teamId) {
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running' && node.teams && node.teams.some(t => t.id === teamId)) {
+                        const teamInfo = node.teams.find(t => t.id === teamId);
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = `${node.name || `Device ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        syncFromNodeSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            if (currentFromValue && syncFromNodeSelector.querySelector(`option[value="${currentFromValue}"]`)) {
+                syncFromNodeSelector.value = currentFromValue;
+            }
+            
+            // To node selector - only show nodes in the selected team
+            const syncToNodeSelector = document.getElementById('syncToNodeSelector');
+            const currentToValue = syncToNodeSelector.value;
+            syncToNodeSelector.innerHTML = '<option value="">-- Select Target Device --</option>';
+            
+            if (teamId) {
+                nodes.forEach((node, id) => {
+                    if (node.status === 'Running' && node.teams && node.teams.some(t => t.id === teamId)) {
+                        const teamInfo = node.teams.find(t => t.id === teamId);
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = `${node.name || `Device ${id.slice(0, 8)}`} ${teamInfo.role ? `(${teamInfo.role})` : '⏳'}`;
+                        syncToNodeSelector.appendChild(option);
+                    }
+                });
+            }
+            
+            if (currentToValue && syncToNodeSelector.querySelector(`option[value="${currentToValue}"]`)) {
+                syncToNodeSelector.value = currentToValue;
+            }
+            
+            updateSyncButtonState();
+        }
+        
+        // Multi-connect helper functions
+        function startMultiConnect(originNodeId) {
+            isMultiConnecting = true;
+            multiConnectOrigin = originNodeId;
+            multiConnectTargets = []; // Reset array
+            multiConnectPath = [];
+            console.log('Started multi-connect from node:', originNodeId);
+        }
+        
+        function addToMultiConnectPath(x, y) {
+            multiConnectPath.push({ x, y });
+            
+            // Check for nodes along the path with a tolerance radius (world coordinates)
+            const DETECTION_RADIUS = 100 / viewportScale; // Much larger radius for better detection
+            
+            console.log(`Checking position (${x.toFixed(1)}, ${y.toFixed(1)}) with radius ${DETECTION_RADIUS.toFixed(1)}`);
+            
+            nodes.forEach((node, nodeId) => {
+                if (nodeId === multiConnectOrigin) return; // Skip origin node
+                if (multiConnectTargets.includes(nodeId)) return; // Skip already added nodes
+                
+                const distance = Math.sqrt(Math.pow(x - node.position.x, 2) + Math.pow(y - node.position.y, 2));
+                console.log(`  Device ${getNodeName(nodeId) || nodeId.substring(0,8)} at (${node.position.x.toFixed(1)}, ${node.position.y.toFixed(1)}) - distance: ${distance.toFixed(1)}`);
+                
+                if (distance <= DETECTION_RADIUS) {
+                    multiConnectTargets.push(nodeId);
+                    console.log('✓ Added node to multi-connect path:', getNodeName(nodeId) || nodeId.substring(0,8), 'at position', x.toFixed(1), y.toFixed(1));
+                }
+            });
+        }
+        
+        function finishMultiConnect() {
+            if (!isMultiConnecting || !multiConnectOrigin) return;
+            
+            const connectTeamId = document.getElementById('connectTeam').value;
+            let interval = parseInt(document.getElementById('connectInterval').value) || 5;
+            const bidirectional = document.getElementById('connectBidirectional').checked;
+            const randomInterval = document.getElementById('connectRandomInterval').checked;
+            const syncNow = document.getElementById('connectSyncNow').checked;
+            
+            // Use tool args team or fallback to selected team
+            const teamId = connectTeamId || selectedTeamId;
+            if (!teamId) {
+                showNotification('Please select a team in the connection options or main team selector!', 'warning');
+                cancelMultiConnect();
+                return;
+            }
+            
+            // Create sequential path: origin+highlighted = [A,B,C,D] -> A→B, B→C, C→D
+            const allNodes = [multiConnectOrigin, ...multiConnectTargets];
+            
+            console.log('Multi-connect debug:');
+            console.log('Origin:', multiConnectOrigin);
+            console.log('Targets:', multiConnectTargets);
+            console.log('All nodes:', allNodes);
+            
+            if (allNodes.length < 2) {
+                showNotification('Need at least 2 nodes to create connections!', 'warning');
+                cancelMultiConnect();
+                return;
+            }
+            
+            let connectionCount = 0;
+            
+            // Create sequential connections: (0→1), (1→2), (2→3), etc.
+            console.log(`Creating ${allNodes.length - 1} connections for ${allNodes.length} nodes`);
+            console.log('Loop bounds: i < ' + (allNodes.length - 1));
+            for (let i = 0; i < allNodes.length - 1; i++) {
+                const fromNodeId = allNodes[i];
+                const toNodeId = allNodes[i + 1];
+                console.log(`Loop iteration ${i}: Connection ${i + 1}: ${getNodeName(fromNodeId) || fromNodeId.substring(0,8)} → ${getNodeName(toNodeId) || toNodeId.substring(0,8)}`);
+                console.log(`  From index ${i}: ${fromNodeId.substring(0,8)}`);
+                console.log(`  To index ${i + 1}: ${toNodeId.substring(0,8)}`);
+                
+                // Validate nodes exist and are in the same team
+                const fromNode = nodes.get(fromNodeId);
+                const toNode = nodes.get(toNodeId);
+                
+                if (!fromNode || !toNode) continue;
+                
+                const fromInTeam = fromNode.teams && fromNode.teams.some(t => t.id === teamId);
+                const toInTeam = toNode.teams && toNode.teams.some(t => t.id === teamId);
+                
+                if (!fromInTeam || !toInTeam) continue; // Skip if not in same team
+                
+                // Apply random interval if selected
+                const currentInterval = randomInterval ? Math.floor(Math.random() * 10) + 1 : interval;
+                
+                // Create primary connection (from → to)
+                ws.send(JSON.stringify({
+                    type: 'AddSyncConnection',
+                    from: fromNodeId,
+                    to: toNodeId,
+                    team_id: teamId,
+                    interval_secs: currentInterval,
+                    sync_now: syncNow
+                }));
+                connectionCount++;
+                
+                // Create reverse connection if bidirectional (to → from)
+                if (bidirectional) {
+                    const reverseInterval = randomInterval ? Math.floor(Math.random() * 10) + 1 : currentInterval;
+                    ws.send(JSON.stringify({
+                        type: 'AddSyncConnection',
+                        from: toNodeId,
+                        to: fromNodeId,
+                        team_id: teamId,
+                        interval_secs: reverseInterval,
+                        sync_now: syncNow
+                    }));
+                    connectionCount++;
+                }
+            }
+            
+            if (connectionCount > 0) {
+                const direction = bidirectional ? 'bidirectional' : 'unidirectional';
+                showNotification(`Created ${connectionCount} ${direction} path connections between ${allNodes.length} nodes`, 'success');
+            } else {
+                showNotification('No valid connections created. Ensure nodes are in the same team.', 'warning');
+            }
+            
+            cancelMultiConnect();
+        }
+        
+        function cancelMultiConnect() {
+            isMultiConnecting = false;
+            multiConnectOrigin = null;
+            multiConnectTargets = []; // Reset array
+            multiConnectPath = [];
+            draw(); // Redraw to clear visual feedback
+        }
+
+        // Keyboard event listeners for multi-connect
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Shift') {
+                shiftPressed = true;
+                if (currentTool === 'connect') {
+                    document.querySelector('.header p').textContent = 'Shift+Drag to connect multiple devices in one action';
+                }
+            }
+        });
+        
+        document.addEventListener('keyup', function(e) {
+            if (e.key === 'Shift') {
+                shiftPressed = false;
+                if (currentTool === 'connect') {
+                    document.querySelector('.header p').textContent = 'Click on receiver device, then click on source device. Arrow shows data flow direction.';
+                }
+                // Cancel multi-connect if in progress
+                if (isMultiConnecting) {
+                    cancelMultiConnect();
+                }
+            }
+        });
+        
         // Initialize
         initializeCanvas();
         setupCanvasEventListeners();
@@ -4038,6 +5911,36 @@ Connections: ${incomingCount} in, ${outgoingCount} out`;
         loadAllTexturePacks();
         loadPreferences();
         connectWebSocket();
+        
+        // Set up automatic canvas size checking
+        // This helps catch cases where the browser doesn't fire resize events
+        setInterval(() => {
+            const viewport = document.querySelector('.canvas-viewport');
+            if (viewport && canvas) {
+                const rect = viewport.getBoundingClientRect();
+                if (canvas.displayWidth !== rect.width || canvas.displayHeight !== rect.height) {
+                    console.log('Periodic size check: Canvas needs resizing');
+                    initializeCanvas();
+                }
+            }
+        }, 1000); // Check every second
+        
+        // Also trigger on visibility changes (e.g., tab switching)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                setTimeout(initializeCanvas, 100);
+            }
+        });
+        
+        // Handle browser zoom changes
+        let lastDevicePixelRatio = window.devicePixelRatio;
+        window.addEventListener('resize', () => {
+            if (window.devicePixelRatio !== lastDevicePixelRatio) {
+                console.log('Device pixel ratio changed (zoom?), reinitializing canvas');
+                lastDevicePixelRatio = window.devicePixelRatio;
+                initializeCanvas();
+            }
+        });
     </script>
 </body>
 </html>"#)
