@@ -50,35 +50,21 @@ recv.read_to_end(&mut recv_buf).await?;  // Never returns!
 
 ## Identified Issues
 
-### Issue 1: `AsyncReadExt::read_to_end` vs Native s2n-quic Methods
+### Issue 1: QUIC Stream FIN Delivery Problem
 
-**Location:** `quic.rs:44` and `quic.rs:332`
+**Core Issue:** The server successfully closes after receiving ACK, but the client never receives the data/FIN. This suggests the ACK the server receives is NOT for the final STREAM frame with the FIN flag.
 
-The syncer uses `tokio::io::AsyncReadExt::read_to_end`:
-```rust
-use tokio::{io::AsyncReadExt, sync::mpsc};
-// ...
-recv.read_to_end(&mut recv_buf).await?;
-```
+**Possible scenarios:**
+1. **FIN lost after data ACKed**: The data was received and ACKed, but a subsequent FIN-bearing frame was lost
+2. **Coalesced FIN not processed**: The FIN was coalesced with data but the receiver didn't process the FIN flag
+3. **Stream state race**: A race condition in the bidirectional stream split where the send-side close interferes with receive-side processing
 
-However, there's a custom implementation in `aranya_util::s2n_quic`:
-```rust
-// s2n_quic.rs:10-27
-pub async fn read_to_end(stream: &mut stream::ReceiveStream) -> Result<Bytes, stream::Error> {
-    let Some(first) = stream.receive().await? else {
-        return Ok(Bytes::new());
-    };
-    // Uses native s2n-quic stream.receive() method
-    // ...
-}
-```
-
-**Problem:** The `AsyncRead` trait implementation in s2n-quic translates between tokio I/O semantics and QUIC stream semantics. This translation layer may have subtle issues with:
-- FIN detection and propagation
-- Buffer management
-- Error handling differences
-
-**Recommendation:** Switch to using `aranya_util::s2n_quic::read_to_end` which uses native s2n-quic methods.
+**The ~50 packets/second pattern explained:**
+- 50/sec ≈ 20ms interval, close to typical local network RTT
+- Bidirectional pattern (B sends, A responds twice) suggests:
+  - B is sending probe/ACK frames
+  - A is retransmitting or sending flow control updates
+- This is consistent with a **Probe Timeout (PTO) retransmission loop**
 
 ### Issue 2: Connection Keep-Alive Behavior
 
@@ -120,12 +106,16 @@ QuicClient::builder()
     .start()
 ```
 
-**Problem:** The server uses BBR (Bottleneck Bandwidth and Round-trip propagation time) while the client uses the default (likely CUBIC or NewReno). This asymmetry can cause issues:
-- BBR is designed for high-bandwidth, high-latency networks
-- In containerized environments with low latency, BBR can be overly aggressive
-- Mismatched congestion controllers can lead to unfair bandwidth sharing and potential stalls
+**Note:** The s2n-quic client API does not support configuring the congestion controller. This asymmetry is unavoidable with the current API.
 
-**Recommendation:** Use the same congestion controller on both sides, or test with the default on both.
+**Potential Impact:**
+- Server uses BBR which is designed for high-bandwidth, high-latency networks
+- Client uses the default (likely CUBIC or NewReno)
+- In containerized environments with variable latency, this asymmetry might cause:
+  - BBR's aggressive probing on the server side
+  - Potential pacing mismatches
+
+**Workaround:** Remove BBR from the server to use default on both sides for testing.
 
 ### Issue 4: Connection Pool Race Condition
 
@@ -251,37 +241,47 @@ conntrack -L | grep -i udp
 
 ## Potential Fixes
 
-### Fix 1: Use Native s2n-quic read_to_end
+### Fix 1: Remove BBR from Server (Test Symmetry)
+
+Since the client cannot configure a congestion controller, test with the default on both:
 
 ```rust
-// In quic.rs, change:
-use tokio::{io::AsyncReadExt, sync::mpsc};
+// In Server::new(), remove the congestion controller:
+let server = QuicServer::builder()
+    .with_tls(tls_server_provider)?
+    .with_io(addr)?
+    // Remove: .with_congestion_controller(Bbr::default())?
+    .start()
+    .map_err(Error::ServerStart)?;
+```
 
-// To:
-use aranya_util::s2n_quic::read_to_end as quic_read_to_end;
-use tokio::sync::mpsc;
+### Fix 2: Add Stream-Level Timeout with Retry
 
-// And update receive_sync_response:
+Add explicit timeout and retry logic to detect and recover from the hang:
+
+```rust
 async fn receive_sync_response<S, A>(/*...*/) -> SyncResult<usize> {
     debug!("client receiving sync response from QUIC sync server");
 
-    let recv_bytes = quic_read_to_end(recv).await
-        .context("failed to read sync response")?;
-    debug!(n = recv_bytes.len(), "received sync response");
+    let mut recv_buf = Vec::new();
+
+    // Add timeout to detect hang
+    match tokio::time::timeout(Duration::from_secs(30), recv.read_to_end(&mut recv_buf)).await {
+        Ok(Ok(_)) => {
+            debug!(n = recv_buf.len(), "received sync response");
+        }
+        Ok(Err(e)) => {
+            error!("Stream error during receive: {:?}", e);
+            return Err(e.into());
+        }
+        Err(_) => {
+            error!("TIMEOUT: read_to_end hung - this is the flaky issue!");
+            // Consider forcing connection close and retry here
+            return Err(anyhow::anyhow!("Sync receive timeout").into());
+        }
+    }
     // ...
 }
-```
-
-### Fix 2: Add Consistent Congestion Controller
-
-```rust
-// In State::new(), add congestion controller to client:
-let client = QuicClient::builder()
-    .with_tls(provider)?
-    .with_io((Ipv4Addr::UNSPECIFIED, 0))?
-    .with_congestion_controller(Bbr::default())?  // Match server
-    .start()
-    .map_err(Error::ClientStart)?;
 ```
 
 ### Fix 3: Add Connection Health Monitoring
@@ -304,20 +304,34 @@ docker run --network host ...
 
 ## Summary
 
-The most likely root cause is a combination of:
+**Most Likely Root Cause:** The STREAM frame with FIN flag is being lost or not processed by the client, causing:
+1. Server thinks it successfully closed (it ACKed, but for previous data, not the FIN)
+2. Client waits indefinitely for FIN
+3. Probe Timeout (PTO) retransmission loop creates the ~50 packets/second pattern
 
-1. **`AsyncReadExt::read_to_end` not properly detecting stream FIN** - The tokio AsyncRead adapter may not correctly translate s2n-quic's stream termination signaling.
+**Contributing Factors:**
+1. **Docker networking UDP issues** - Packet loss, buffer issues, or conntrack problems causing selective frame loss
+2. **Connection reuse race conditions** - The SharedConnectionMap may have stale connection state issues
+3. **Network path changes** - Cross-machine networks have more variability, increasing the failure rate
 
-2. **Docker networking UDP quirks** - Packet loss, buffer issues, or conntrack problems causing the STREAM FIN or final data frames to be lost.
+**The ~50 packets/second Pattern Breakdown:**
+- 50/sec ≈ 20ms RTT (typical local/container network)
+- Server retransmits FIN-bearing STREAM frame on PTO
+- Client ACKs frames it has seen (not the FIN)
+- Two responses from A = retransmitted data + ACK for B's packet
 
-3. **Asymmetric congestion controller** - BBR on server only may cause suboptimal behavior.
+## Next Steps (Priority Order)
 
-The ~50 packets/second pattern strongly suggests a flow control or retransmission loop where both sides are alive but disagreeing about stream state.
+1. **Capture packets** - Use tcpdump/Wireshark to confirm whether FIN-bearing STREAM frames are being sent and whether they're received at the UDP level
+2. **Enable s2n-quic tracing** - Set `RUST_LOG=s2n_quic=trace` to see stream state machine transitions
+3. **Test with host networking** - `docker run --network host` to isolate Docker networking as the cause
+4. **Remove BBR from server** - Test with default congestion controller on both sides
+5. **Add stream timeout** - Add explicit timeout to detect and recover from hangs
+6. **Check UDP buffer sizes** - Increase `rmem_max` and `wmem_max` in containers
 
-## Next Steps
+## Key Questions to Answer
 
-1. Add comprehensive tracing/logging to the sync path
-2. Test with native s2n-quic `read_to_end`
-3. Capture packets to confirm the STREAM FIN delivery
-4. Test with host networking to isolate Docker issues
-5. Test with matching congestion controllers on both sides
+1. Is the FIN-bearing STREAM frame being sent by the server at the UDP level?
+2. Is that UDP packet arriving at the client container?
+3. Is s2n-quic's stream state machine receiving and processing it?
+4. What frame types are in the ~50/second packets?
