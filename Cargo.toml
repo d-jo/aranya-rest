@@ -34,10 +34,22 @@ unwrap_used = "warn"
 wildcard_imports = "warn"
 
 [workspace.dependencies]
+# Aranya v4.0.0 dependencies
+aranya-client = { version = "4.0.0", features = ["afc"] }
+aranya-daemon-api = { version = "4.0.0" }
+aranya-crypto = { version = "0.16.0", features = ["alloc", "std"] }
+aranya-fast-channels = { version = "0.16.0" }
+aranya-policy-text = { version = "4.0.0" }
+
+# Local crates (for backwards compatibility during migration)
+aranya-daemon = { version = "0.6.1", path = "crates/aranya-daemon" }
+aranya-keygen = { version = "0.6.1", path = "crates/aranya-keygen" }
+aranya-util = { version = "0.6.1", path = "crates/aranya-util" }
+
+# Legacy dependencies (kept for aranya-daemon local crate)
 aranya-aqc-util = { version = "0.5.0", features = ["alloc"] }
 aranya-capi-core = { version = "0.4.2" }
 aranya-capi-codegen = { version = "0.3.2" }
-aranya-crypto = { version = "0.7.1", features = ["alloc", "aqc", "fs-keystore", "clone-aead", "std"] }
 aranya-crypto-ffi = { version = "0.10.0" }
 aranya-device-ffi = { version = "0.10.0" }
 aranya-envelope-ffi = { version = "0.10.0" }
@@ -51,12 +63,6 @@ aranya-policy-vm = { version = "0.10.0", features = ["std"] }
 aranya-runtime = { version = "0.10.0", features = ["std", "libc"] }
 
 buggy = { version = "0.1.0" }
-
-aranya-client = { version = "0.6.1", path = "crates/aranya-client" }
-aranya-daemon = { version = "0.6.1", path = "crates/aranya-daemon" }
-aranya-daemon-api = { version = "0.6.1", path = "crates/aranya-daemon-api" }
-aranya-keygen = { version = "0.6.1", path = "crates/aranya-keygen" }
-aranya-util = { version = "0.6.1", path = "crates/aranya-util" }
 
 anyhow = { version = "1.0.86" }
 bytes = { version = "1.0" }

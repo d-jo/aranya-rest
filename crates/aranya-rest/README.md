@@ -1,10 +1,17 @@
-# Aranya REST Server
+# Aranya REST Server v4.0.0
 
 A REST API server for the Aranya daemon that provides HTTP endpoints for all daemon operations.
 
 ## Overview
 
 This server acts as a REST API gateway to the Aranya daemon, allowing clients to interact with Aranya using standard HTTP requests instead of the native tarpc protocol. It provides JSON-based endpoints covering all operations available in the daemon API.
+
+**v4.0.0 Features:**
+- Custom RBAC roles with hierarchical permissions
+- AFC (Aranya Fast Channels) - replaces the deprecated AQC system
+- Enhanced label management with managing role requirements
+- PSK encryption for secure sync operations
+- Initial role assignment when adding devices
 
 ## Building
 
@@ -33,51 +40,82 @@ The server expects to find the daemon's public API key in a file named `api.pk` 
 
 ### Version and Device Information
 
-- `GET /api/v1/version` - Get daemon version
-- `GET /api/v1/local-addr` - Get daemon's local address
-- `GET /api/v1/key-bundle` - Get device's public key bundle
-- `GET /api/v1/device-id` - Get device ID
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/version` | Get daemon version |
+| GET | `/api/v1/local-addr` | Get daemon's local address |
+| GET | `/api/v1/key-bundle` | Get device's public key bundle |
+| GET | `/api/v1/device-id` | Get device ID |
 
 ### Sync Peer Management
 
-- `POST /api/v1/sync/peers` - Add sync peer
-- `POST /api/v1/sync/now` - Sync with peer immediately
-- `DELETE /api/v1/sync/peers` - Remove sync peer
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/sync/peers` | Add sync peer |
+| POST | `/api/v1/sync/now` | Sync with peer immediately |
+| DELETE | `/api/v1/sync/peers` | Remove sync peer |
+| GET | `/api/v1/teams/{team_id}/sync/peers` | Query sync peers for team |
+| GET | `/api/v1/teams/{team_id}/sync/peers/{addr}/config` | Query sync peer config |
+| PUT | `/api/v1/sync/peers/config` | Update sync peer config |
+| POST | `/api/v1/teams/{team_id}/sync/encrypt-psk-seed` | Encrypt PSK seed for peer (v4.0.0) |
 
 ### Team Management
 
-- `POST /api/v1/teams` - Create new team
-- `DELETE /api/v1/teams/{team_id}` - Close team
-- `GET /api/v1/teams/{team_id}/devices` - Query devices on team
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/teams` | Create new team |
+| DELETE | `/api/v1/teams/{team_id}` | Close team |
+| POST | `/api/v1/teams/{team_id}/add` | Add existing team to local storage |
+| DELETE | `/api/v1/teams/{team_id}/remove` | Remove team from local storage |
+| GET | `/api/v1/teams/{team_id}/devices` | Query devices on team |
 
 ### Device Management
 
-- `POST /api/v1/teams/{team_id}/devices` - Add device to team
-- `DELETE /api/v1/teams/{team_id}/devices/{device_id}` - Remove device from team
-- `GET /api/v1/teams/{team_id}/devices/{device_id}/role` - Query device role
-- `GET /api/v1/teams/{team_id}/devices/{device_id}/keybundle` - Query device key bundle
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/teams/{team_id}/devices` | Add device to team (supports initial_role) |
+| DELETE | `/api/v1/teams/{team_id}/devices/{device_id}` | Remove device from team |
+| GET | `/api/v1/teams/{team_id}/devices/{device_id}/keybundle` | Query device key bundle |
+| GET | `/api/v1/teams/{team_id}/devices/{device_id}/role` | Query device role |
+| GET | `/api/v1/teams/{team_id}/devices/{device_id}/labels` | Query device labels (v4.0.0) |
 
-### Role Management
+### Role Management (v4.0.0 Custom RBAC)
 
-- `POST /api/v1/teams/{team_id}/roles/assign` - Assign role to device
-- `POST /api/v1/teams/{team_id}/roles/revoke` - Revoke role from device
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/teams/{team_id}/roles/setup-defaults` | Setup default roles for team |
+| GET | `/api/v1/teams/{team_id}/roles` | Query all roles on team |
+| GET | `/api/v1/teams/{team_id}/roles/{role_id}/owners` | Query roles that own a role |
+| GET | `/api/v1/teams/{team_id}/roles/{role_id}/devices` | Query devices by role |
+| GET | `/api/v1/teams/{team_id}/device-roles` | Query all device roles |
+| POST | `/api/v1/teams/{team_id}/roles/assign` | Assign role to device |
+| POST | `/api/v1/teams/{team_id}/roles/revoke` | Revoke role from device |
+| POST | `/api/v1/teams/{team_id}/roles/change` | Change device role |
+| POST | `/api/v1/teams/{team_id}/roles/bulk-assign` | Bulk assign roles |
 
-### Network Identifier Management
+### Label Management (v4.0.0)
 
-- `POST /api/v1/teams/{team_id}/net-identifiers/assign` - Assign network identifier
-- `POST /api/v1/teams/{team_id}/net-identifiers/remove` - Remove network identifier
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/teams/{team_id}/labels` | Query labels on team |
+| POST | `/api/v1/teams/{team_id}/labels` | Create label (requires managing_role_id) |
+| GET | `/api/v1/teams/{team_id}/labels/{label_id}` | Query specific label |
+| DELETE | `/api/v1/teams/{team_id}/labels/{label_id}` | Delete label |
+| POST | `/api/v1/teams/{team_id}/labels/managing-role` | Add managing role to label |
+| POST | `/api/v1/teams/{team_id}/labels/assign` | Assign label to device |
+| POST | `/api/v1/teams/{team_id}/labels/revoke` | Revoke label from device |
 
-### Label Management
+### AFC (Aranya Fast Channels) - v4.0.0
 
-- `GET /api/v1/teams/{team_id}/labels` - Query labels on team
-- `POST /api/v1/teams/{team_id}/labels` - Create label
-- `DELETE /api/v1/teams/{team_id}/labels/{label_id}` - Delete label
-- `POST /api/v1/teams/{team_id}/labels/assign` - Assign label to device
-- `POST /api/v1/teams/{team_id}/labels/revoke` - Revoke label from device
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/teams/{team_id}/afc/channels` | Create send channel |
+| POST | `/api/v1/teams/{team_id}/afc/channels/accept` | Accept receive channel |
+| DELETE | `/api/v1/afc/channels` | Delete channel |
 
 ## Request/Response Format
 
-All requests and responses use JSON format. IDs (team, device, label) are represented as hex-encoded strings. Binary data (keys, etc.) are base64-encoded.
+All requests and responses use JSON format. IDs (team, device, label, role) are represented as hex-encoded 32-byte strings. Binary data (keys, etc.) are base64-encoded.
 
 ### Example: Create Team
 
@@ -95,7 +133,7 @@ Response:
 }
 ```
 
-### Example: Add Device to Team
+### Example: Add Device to Team with Initial Role (v4.0.0)
 
 Request:
 ```bash
@@ -104,26 +142,93 @@ curl -X POST http://localhost:8080/api/v1/teams/{team_id}/devices \
   -d '{
     "keys": {
       "identity": "base64-encoded-identity-key",
-      "signing": "base64-encoded-signing-key", 
+      "signing": "base64-encoded-signing-key",
       "encoding": "base64-encoded-encoding-key"
-    }
+    },
+    "initial_role": "hex-encoded-role-id"
   }'
+```
+
+### Example: Create Label with Managing Role (v4.0.0)
+
+Request:
+```bash
+curl -X POST http://localhost:8080/api/v1/teams/{team_id}/labels \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-label",
+    "managing_role_id": "hex-encoded-role-id"
+  }'
+```
+
+Response:
+```json
+{
+  "label_id": "a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456"
+}
+```
+
+### Example: Create AFC Channel (v4.0.0)
+
+Request:
+```bash
+curl -X POST http://localhost:8080/api/v1/teams/{team_id}/afc/channels \
+  -H "Content-Type: application/json" \
+  -d '{
+    "peer_id": "hex-encoded-device-id",
+    "label_id": "hex-encoded-label-id"
+  }'
+```
+
+Response:
+```json
+{
+  "channel_id": "hex-encoded-channel-id",
+  "ctrl_msg": "base64-encoded-control-message"
+}
+```
+
+### Example: Query Team Roles (v4.0.0)
+
+Request:
+```bash
+curl http://localhost:8080/api/v1/teams/{team_id}/roles
+```
+
+Response:
+```json
+{
+  "roles": [
+    {
+      "id": "hex-encoded-role-id",
+      "name": "Admin",
+      "author_id": "hex-encoded-device-id",
+      "is_default": true
+    }
+  ]
+}
 ```
 
 ## Error Handling
 
 The server returns appropriate HTTP status codes:
 
-- `200 OK` - Success
-- `400 Bad Request` - Invalid request or daemon API error
-- `500 Internal Server Error` - Server error
-- `503 Service Unavailable` - Daemon connection error
+| Status | Description |
+|--------|-------------|
+| 200 OK | Success |
+| 400 Bad Request | Invalid request or daemon API error |
+| 403 Forbidden | Permission denied |
+| 404 Not Found | Resource not found |
+| 409 Conflict | Resource already exists |
+| 500 Internal Server Error | Server error |
+| 503 Service Unavailable | Daemon connection error |
 
 Error responses include details:
 ```json
 {
-  "error": "error category",
-  "details": "detailed error message"
+  "error": "error_type",
+  "message": "detailed error message",
+  "status": 400
 }
 ```
 
@@ -168,3 +273,19 @@ For manual testing and development:
 ```
 
 See `scripts/README.md` for detailed testing instructions and examples.
+
+## Migration from v0.6.x
+
+### Breaking Changes
+
+1. **Role System**: The fixed `Role` enum (Owner, Admin, Operator, Member) is replaced with custom `RoleId`-based roles. Use `setup_default_roles` to initialize standard roles.
+
+2. **Label Creation**: Now requires a `managing_role_id` parameter specifying which role manages the label.
+
+3. **AQC Removed**: The AQC (Aranya QUIC Channels) system is removed and replaced with AFC (Aranya Fast Channels). Bidirectional channels are no longer supported - use two unidirectional channels instead.
+
+4. **Device Addition**: The `add_device_to_team` endpoint now accepts an optional `initial_role` parameter.
+
+5. **Request/Response Changes**:
+   - Role queries return `RoleInfo` objects with `id`, `name`, `author_id`, `is_default`
+   - Label operations require/return role IDs instead of role names
